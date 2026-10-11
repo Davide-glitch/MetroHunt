@@ -4,7 +4,7 @@ echo   Starting Metro Hunt: Full-Stack Tycoon Simulation
 echo ========================================================
 
 echo 1. Starting ASP.NET Core Web API Backend on port 5000...
-start "MetroHunt.Server" cmd /k "cd MetroHunt.Server && dotnet run --urls http://localhost:5000"
+start "MetroHunt.Server" cmd /k "cd MetroHunt.Server && dotnet run --no-build --urls http://localhost:5000"
 
 timeout /t 3 >nul
 
