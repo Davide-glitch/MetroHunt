@@ -1,11 +1,13 @@
 import React from 'react';
-import { Building2, User, Landmark, RotateCcw, Play, Radio, LogOut } from 'lucide-react';
+import { Building2, User, Landmark, RotateCcw, Play, Radio, LogOut, Briefcase } from 'lucide-react';
 
 interface NavbarProps {
   userName?: string;
   isSignalRConnected: boolean;
   onOpenAuth: () => void;
   onOpenLoan: () => void;
+  onWorkDeal: () => void;
+  isWorking: boolean;
   onAdvanceTurn: () => void;
   isAdvancing: boolean;
   onResetGame: () => void;
@@ -17,6 +19,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   isSignalRConnected,
   onOpenAuth,
   onOpenLoan,
+  onWorkDeal,
+  isWorking,
   onAdvanceTurn,
   isAdvancing,
   onResetGame,
@@ -60,6 +64,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Landmark size={14} className="text-blue-400" />
             <span className="hidden sm:inline">Credit Facility</span>
+          </button>
+
+          {/* Work / Close Brokerage Deal Button */}
+          <button
+            disabled={isWorking}
+            onClick={onWorkDeal}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md shadow-amber-500/20 transition-all cursor-pointer"
+            title="Work as a real estate broker to earn immediate cash"
+          >
+            <Briefcase size={14} className={isWorking ? 'animate-bounce' : ''} />
+            <span>{isWorking ? 'Closing Deal...' : 'Work Deal'}</span>
           </button>
 
           {/* Advance Turn Button */}

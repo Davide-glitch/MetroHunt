@@ -34,6 +34,26 @@ namespace MetroHunt.Server.Controllers
             return Ok(result);
         }
 
+        [HttpPost("work")]
+        public async Task<IActionResult> WorkDeal()
+        {
+            string? playerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(playerId))
+            {
+                var defaultPlayer = await _context.Users.FirstOrDefaultAsync();
+                if (defaultPlayer == null) return Unauthorized("No registered player.");
+                playerId = defaultPlayer.Id;
+            }
+
+            var result = await _engine.WorkDealAsync(playerId);
+            if (!result.Success)
+            {
+                return BadRequest(result);
+            }
+
+            return Ok(result);
+        }
+
         [HttpGet("session")]
         public async Task<IActionResult> GetSession()
         {

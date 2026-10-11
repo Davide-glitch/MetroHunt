@@ -586,6 +586,73 @@ namespace MetroHunt.Server.Services
             return false;
         }
 
+        public async Task<WorkDealResult> WorkDealAsync(string playerId)
+        {
+            var player = await _context.Users
+                .Include(u => u.OwnedProperties)
+                .Include(u => u.ActiveLoans)
+                .FirstOrDefaultAsync(u => u.Id == playerId);
+
+            if (player == null)
+            {
+                return new WorkDealResult { Success = false, Message = "Player not found." };
+            }
+
+            var session = await GetOrCreateActiveSessionAsync();
+            if (session.IsCompleted)
+            {
+                return new WorkDealResult { Success = false, Message = "Simulation session has completed. Reset game to start anew." };
+            }
+
+            string[] dealTypes = new[]
+            {
+                "Commercial Real Estate Brokerage Fee",
+                "Off-Market Architectural Consulting",
+                "Municipal Zoning Advisory Contract",
+                "High-Yield Mezzanine Syndication Fee",
+                "Luxury Penthouse Staging Commission",
+                "Corporate Relocation Advisory Fee"
+            };
+
+            string dealTitle = dealTypes[_rand.Next(dealTypes.Length)];
+            // Earn between $5,000 and $15,000 per deal, scaling with turns survived
+            decimal baseReward = _rand.Next(5000, 15000);
+            decimal bonusFromExperience = Math.Min(25000m, player.TurnsSurvived * 500m);
+            decimal totalEarned = baseReward + bonusFromExperience;
+
+            player.LiquidBalance += totalEarned;
+
+            _context.AuditLogs.Add(new AuditLog
+            {
+                PlayerUserId = player.Id,
+                ActionType = AuditActionType.WorkIncome,
+                Description = $"{dealTitle} (Earned +${totalEarned:N0})",
+                Amount = totalEarned,
+                PostBalance = player.LiquidBalance,
+                TurnNumber = session.CurrentRound
+            });
+
+            await _context.SaveChangesAsync();
+
+            decimal totalPropertyVal = player.OwnedProperties.Sum(p => p.Price);
+            decimal totalDebt = player.ActiveLoans.Sum(l => l.RemainingBalance);
+            decimal netWorth = player.LiquidBalance + totalPropertyVal - totalDebt;
+
+            // Broadcast real-time leaderboard update
+            var leaderboard = await GetLeaderboardAsync();
+            await _hubContext.Clients.All.SendAsync("RaceProgressUpdated", leaderboard);
+
+            return new WorkDealResult
+            {
+                Success = true,
+                Message = $"Deal Closed! {dealTitle} paid out +${totalEarned:N0}.",
+                EarnedAmount = totalEarned,
+                NewBalance = player.LiquidBalance,
+                NewNetWorth = netWorth,
+                DealTitle = dealTitle
+            };
+        }
+
         public async Task<List<Property>> GenerateProceduralPropertiesAsync(int count = 6)
         {
             var generated = new List<Property>();
@@ -593,31 +660,41 @@ namespace MetroHunt.Server.Services
             for (int i = 0; i < count; i++)
             {
                 var district = Districts[_rand.Next(Districts.Length)];
-                var type = PropertyTypes[_rand.Next(PropertyTypes.Length)];
+                // Guarantee at least 2 starter micro-studios/apartments under $80,000 so beginners can buy immediately
+                string type;
+                if (i < 2)
+                {
+                    type = "Apartment";
+                }
+                else
+                {
+                    type = PropertyTypes[_rand.Next(PropertyTypes.Length)];
+                }
+
                 var street = StreetNames[_rand.Next(StreetNames.Length)];
                 int streetNum = _rand.Next(100, 9999);
 
                 decimal basePrice = type switch
                 {
-                    "Apartment" => 50_000m,
-                    "House" => 150_000m,
-                    "Commercial" => 400_000m,
-                    "HighRise" => 1_200_000m,
-                    _ => 100_000m
+                    "Apartment" => 35_000m,   // Generates $30k - $75k accessible properties!
+                    "House" => 120_000m,
+                    "Commercial" => 350_000m,
+                    "HighRise" => 950_000m,
+                    _ => 75_000m
                 };
 
                 decimal districtMultiplier = district switch
                 {
-                    "Financial" => 1.6m,
-                    "Downtown" => 1.4m,
-                    "Suburbs" => 1.0m,
-                    "Industrial" => 0.8m,
+                    "Financial" => 1.4m,
+                    "Downtown" => 1.25m,
+                    "Suburbs" => 0.95m,
+                    "Industrial" => 0.75m,
                     _ => 1.0m
                 };
 
-                decimal variance = (decimal)(0.90 + _rand.NextDouble() * 0.35);
+                decimal variance = (decimal)(0.85 + _rand.NextDouble() * 0.30);
                 decimal finalPrice = Math.Round(basePrice * districtMultiplier * variance, 0);
-                decimal monthlyRent = Math.Round(finalPrice * 0.0085m, 0);
+                decimal monthlyRent = Math.Round(finalPrice * 0.0090m, 0);
 
                 var prop = new Property
                 {
@@ -626,7 +703,7 @@ namespace MetroHunt.Server.Services
                     Type = type,
                     Price = finalPrice,
                     MonthlyRent = monthlyRent,
-                    Condition = _rand.Next(65, 95),
+                    Condition = _rand.Next(70, 98),
                     IsOccupied = false,
                     OwnerId = null
                 };

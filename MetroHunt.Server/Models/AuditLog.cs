@@ -11,7 +11,8 @@ namespace MetroHunt.Server.Models
         DebtService,
         Renovation,
         RegulatoryAudit,
-        MacroEventImpact
+        MacroEventImpact,
+        WorkIncome
     }
 
     public class AuditLog

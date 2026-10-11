@@ -32,6 +32,7 @@ export function App() {
   const [isLoanOpen, setIsLoanOpen] = useState<boolean>(false);
   const [victoryData, setVictoryData] = useState<VictoryData | null>(null);
   const [isAdvancing, setIsAdvancing] = useState<boolean>(false);
+  const [isWorking, setIsWorking] = useState<boolean>(false);
   const [isBuying, setIsBuying] = useState<boolean>(false);
   const [isRenovating, setIsRenovating] = useState<boolean>(false);
   const [isAuditing, setIsAuditing] = useState<boolean>(false);
@@ -109,9 +110,9 @@ export function App() {
         setNetWorth(data.netWorth);
         setTurnsSurvived(data.turnsSurvived);
         setOwnedProperties(data.ownedProperties || []);
-      } else if (!user) {
-        // Auto sign-in to default Investor 1 for zero-friction evaluation
-        handleLogin('player1@metrohunt.com', 'password123');
+      } else if (!token && !user) {
+        // Fallback demo profile only on initial empty load if no token exists
+        handleLogin('player1@metrohunt.com', 'password123').catch(() => {});
       }
     } catch (err) {
       console.warn('Failed to fetch user state: ', err);
@@ -193,24 +194,32 @@ export function App() {
       });
       showToast(`Welcome back, ${data.userName}!`);
     } else {
-      // Auto register if account not found
-      const regRes = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, userName: email.split('@')[0], password })
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Invalid credentials.');
+    }
+  };
+
+  const handleRegister = async (email: string, regUserName: string, password = 'password123') => {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, userName: regUserName, password })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      localStorage.setItem('metrohunt_token', data.token);
+      setToken(data.token);
+      setUser({
+        id: data.userId,
+        userName: data.userName,
+        email: data.email,
+        liquidBalance: data.liquidBalance
       });
-      if (regRes.ok) {
-        const data = await regRes.json();
-        localStorage.setItem('metrohunt_token', data.token);
-        setToken(data.token);
-        setUser({
-          id: data.userId,
-          userName: data.userName,
-          email: data.email,
-          liquidBalance: data.liquidBalance
-        });
-        showToast(`Registered investor profile: ${data.userName}!`);
-      }
+      showToast(`Registered investor profile: ${data.userName}!`);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Registration failed.');
     }
   };
 
@@ -232,6 +241,9 @@ export function App() {
         liquidBalance: data.liquidBalance
       });
       showToast(`Authenticated via Google profile: ${data.userName}!`);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Google authentication failed.');
     }
   };
 
@@ -240,6 +252,36 @@ export function App() {
     setToken(null);
     setUser(null);
     showToast('Signed out of investor session.');
+  };
+
+  // Active Income: Broker Deals & Advisory Fees
+  const handleWorkDeal = async () => {
+    setIsWorking(true);
+    try {
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/game/work', {
+        method: 'POST',
+        headers
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setNetWorth(data.newNetWorth);
+        if (user) setUser({ ...user, liquidBalance: data.newBalance });
+        showToast(`💼 ${data.message}`);
+        fetchUserData();
+        fetchAuditLogs();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        showToast(data.message || 'Deal negotiation failed.');
+      }
+    } catch (err: any) {
+      showToast(`Deal error: ${err.message}`);
+    } finally {
+      setIsWorking(false);
+    }
   };
 
   // Turn Progression
@@ -432,6 +474,8 @@ export function App() {
         isSignalRConnected={isConnected}
         onOpenAuth={() => setIsAuthOpen(true)}
         onOpenLoan={() => setIsLoanOpen(true)}
+        onWorkDeal={handleWorkDeal}
+        isWorking={isWorking}
         onAdvanceTurn={handleAdvanceTurn}
         isAdvancing={isAdvancing}
         onResetGame={handleResetGame}
@@ -497,6 +541,7 @@ export function App() {
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
         onLogin={handleLogin}
+        onRegister={handleRegister}
         onGoogleLogin={handleGoogleLogin}
       />
 

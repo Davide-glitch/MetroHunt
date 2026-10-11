@@ -55,6 +55,16 @@ namespace MetroHunt.Server.DTOs
         public decimal NewBalance { get; set; }
     }
 
+    public class WorkDealResult
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public decimal EarnedAmount { get; set; }
+        public decimal NewBalance { get; set; }
+        public decimal NewNetWorth { get; set; }
+        public string DealTitle { get; set; } = string.Empty;
+    }
+
     public class HostileAuditResult
     {
         public bool Success { get; set; }

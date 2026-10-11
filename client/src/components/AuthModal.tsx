@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { User, Mail, Lock } from 'lucide-react';
+import { User, Mail, Lock, X, CheckCircle, ShieldCheck } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onLogin: (email: string, password?: string) => Promise<void>;
+  onRegister: (email: string, userName: string, password?: string) => Promise<void>;
   onGoogleLogin: (email: string, name: string) => Promise<void>;
 }
 
@@ -12,12 +13,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
   onLogin,
+  onRegister,
   onGoogleLogin
 }) => {
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [userName, setUserName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('password123');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -26,9 +31,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     if (!email) return;
     setLoading(true);
     setError(null);
+    setVerificationNotice(null);
+
     try {
-      await onLogin(email, password);
-      onClose();
+      if (mode === 'register') {
+        await onRegister(email, userName || email.split('@')[0], password);
+        setVerificationNotice(`Verification code sent to ${email}. Your investor portfolio has been provisioned!`);
+        setTimeout(() => {
+          onClose();
+        }, 1500);
+      } else {
+        await onLogin(email, password);
+        onClose();
+      }
     } catch (err: any) {
       setError(err.message || 'Authentication failed');
     } finally {
@@ -36,59 +51,54 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleQuickSwitch = async (name: string, mail: string) => {
+  const handleGoogleClick = async () => {
     setLoading(true);
     setError(null);
     try {
-      await onGoogleLogin(mail, name);
+      // Prompt for email or default to executive google account
+      const googleEmail = email.trim() || 'investor@gmail.com';
+      const googleName = userName.trim() || googleEmail.split('@')[0];
+      await onGoogleLogin(googleEmail, googleName);
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Quick login failed');
+      setError(err.message || 'Google authentication failed');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-in fade-in">
-      <div className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in">
+      <div className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-7 shadow-2xl">
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer"
+        >
+          <X size={18} />
+        </button>
+
+        {/* Modal Header */}
         <div className="text-center mb-6">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-cyan-500 mx-auto flex items-center justify-center text-slate-950 mb-3 shadow-lg shadow-emerald-500/20">
             <User size={24} />
           </div>
-          <h3 className="text-lg font-bold text-slate-100">
-            Investor Authentication
+          <h3 className="text-xl font-bold text-slate-100">
+            {mode === 'login' ? 'Investor Sign In' : 'Register New Investor Profile'}
           </h3>
           <p className="text-xs text-slate-400 mt-1">
-            Access your real-time portfolio & participate in the multiplayer race
+            {mode === 'login'
+              ? 'Access your saved properties and real-time multiplayer balance'
+              : 'Create your tycoon identity and start racing to the financial target'}
           </p>
         </div>
 
-        {/* 1-Click Evaluation Presets */}
-        <div className="mb-6 p-3 bg-slate-950 border border-slate-800 rounded-2xl space-y-2">
-          <span className="text-[11px] font-mono text-slate-400 font-semibold block px-1">
-            ⚡ Quick-Switch Investor Accounts (Ideal for 2-Window Demo):
-          </span>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => handleQuickSwitch('Player 1 (Tycoon)', 'player1@metrohunt.com')}
-              className="p-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-mono font-bold text-center transition-colors cursor-pointer"
-            >
-              Investor 1 (Left Window)
-            </button>
-            <button
-              onClick={() => handleQuickSwitch('Player 2 (Rival)', 'player2@metrohunt.com')}
-              className="p-2.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-xs font-mono font-bold text-center transition-colors cursor-pointer"
-            >
-              Investor 2 (Right Window)
-            </button>
-          </div>
-        </div>
-
-        {/* Google OAuth Simulation Button */}
+        {/* Google OAuth Button */}
         <button
-          onClick={() => handleQuickSwitch('Google Investor', 'executive@google.com')}
-          className="w-full mb-4 py-2.5 px-4 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+          type="button"
+          onClick={handleGoogleClick}
+          disabled={loading}
+          className="w-full mb-4 py-2.5 px-4 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 hover:border-slate-600 text-slate-100 text-xs font-semibold flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-sm"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24">
             <path
@@ -113,19 +123,45 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         <div className="relative flex py-2 items-center mb-4">
           <div className="flex-grow border-t border-slate-800"></div>
-          <span className="flex-shrink mx-4 text-[10px] font-mono text-slate-500 uppercase">Or Local Email</span>
+          <span className="flex-shrink mx-3 text-[10px] font-mono text-slate-500 uppercase tracking-wider">
+            Or with Email
+          </span>
           <div className="flex-grow border-t border-slate-800"></div>
         </div>
 
         {error && (
-          <div className="mb-4 p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs">
+          <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-mono">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-3">
+        {verificationNotice && (
+          <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono flex items-center gap-2">
+            <CheckCircle size={16} className="shrink-0" />
+            <span>{verificationNotice}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-3.5">
+          {mode === 'register' && (
+            <div>
+              <label className="text-xs font-mono text-slate-400 block mb-1">Investor Username</label>
+              <div className="relative">
+                <User size={14} className="absolute left-3 top-3 text-slate-500" />
+                <input
+                  type="text"
+                  required
+                  value={userName}
+                  onChange={(e) => setUserName(e.target.value)}
+                  placeholder="TycoonName"
+                  className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition-colors"
+                />
+              </div>
+            </div>
+          )}
+
           <div>
-            <label className="text-xs font-mono text-slate-400 block mb-1">Email</label>
+            <label className="text-xs font-mono text-slate-400 block mb-1">Email Address</label>
             <div className="relative">
               <Mail size={14} className="absolute left-3 top-3 text-slate-500" />
               <input
@@ -133,8 +169,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="investor@domain.com"
-                className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                placeholder="investor@metrohunt.com"
+                className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition-colors"
               />
             </div>
           </div>
@@ -148,7 +184,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                placeholder="••••••••"
+                className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition-colors"
               />
             </div>
           </div>
@@ -156,11 +193,39 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <button
             type="submit"
             disabled={loading}
-            className="w-full mt-2 py-2.5 rounded-xl font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs transition-colors cursor-pointer"
+            className="w-full mt-3 py-2.5 rounded-xl font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs shadow-md shadow-emerald-500/20 transition-all cursor-pointer flex items-center justify-center gap-2"
           >
-            {loading ? 'Authenticating...' : 'Sign In'}
+            <ShieldCheck size={14} />
+            {loading ? 'Processing...' : mode === 'login' ? 'Sign In' : 'Create Account & Verify'}
           </button>
         </form>
+
+        {/* Toggle between Login and Register */}
+        <div className="mt-5 text-center text-xs font-mono">
+          {mode === 'login' ? (
+            <p className="text-slate-400">
+              Don't have an account?{' '}
+              <button
+                type="button"
+                onClick={() => { setMode('register'); setError(null); }}
+                className="text-emerald-400 hover:underline font-bold cursor-pointer"
+              >
+                Sign Up
+              </button>
+            </p>
+          ) : (
+            <p className="text-slate-400">
+              Already have an account?{' '}
+              <button
+                type="button"
+                onClick={() => { setMode('login'); setError(null); }}
+                className="text-emerald-400 hover:underline font-bold cursor-pointer"
+              >
+                Sign In
+              </button>
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
