@@ -39,7 +39,7 @@ namespace MetroHunt.Server.Services
             {
                 session = new GameSession
                 {
-                    TargetNetWorth = 100_000_000.00m, // Target $100M
+                    TargetNetWorth = 100_000_000.00m,
                     CurrentRound = 1,
                     IsCompleted = false
                 };
@@ -51,7 +51,6 @@ namespace MetroHunt.Server.Services
 
         public async Task<PropertyBuyResult> BuyPropertyAsync(int propertyId, string playerId, byte[]? clientRowVersion = null)
         {
-            // Explicit database transaction with optimistic concurrency handling
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
@@ -101,29 +100,36 @@ namespace MetroHunt.Server.Services
                     };
                 }
 
-                // If client provided a RowVersion token, apply it to detect mid-flight concurrent updates
                 if (clientRowVersion != null && clientRowVersion.Length > 0)
                 {
                     _context.Entry(property).Property(p => p.RowVersion).OriginalValue = clientRowVersion;
                 }
 
-                // Execute transfer
                 player.LiquidBalance -= property.Price;
                 property.OwnerId = player.Id;
                 property.IsOccupied = true;
 
+                // Log audit action
+                _context.AuditLogs.Add(new AuditLog
+                {
+                    PlayerUserId = player.Id,
+                    PropertyId = property.Id,
+                    ActionType = AuditActionType.Acquisition,
+                    Description = $"Acquired {property.Title} ({property.District}) for ${property.Price:N0}",
+                    Amount = -property.Price,
+                    PostBalance = player.LiquidBalance,
+                    TurnNumber = session.CurrentRound
+                });
+
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                // Compute updated metrics
                 decimal portfolioVal = player.OwnedProperties.Sum(p => p.Price) + property.Price;
                 decimal debt = player.ActiveLoans.Sum(l => l.RemainingBalance);
                 decimal netWorth = player.LiquidBalance + portfolioVal - debt;
 
-                // Evaluate victory condition atomically
                 await EvaluateWinConditionAsync(playerId);
 
-                // Broadcast property purchase to all connected clients over SignalR
                 await _hubContext.Clients.All.SendAsync("PropertyPurchased", new
                 {
                     PropertyId = property.Id,
@@ -135,7 +141,6 @@ namespace MetroHunt.Server.Services
                     RemainingBalance = player.LiquidBalance
                 });
 
-                // Broadcast updated race leaderboard
                 var leaderboard = await GetLeaderboardAsync();
                 await _hubContext.Clients.All.SendAsync("RaceProgressUpdated", leaderboard);
 
@@ -185,14 +190,14 @@ namespace MetroHunt.Server.Services
                 session.CurrentRound++;
                 player.TurnsSurvived++;
 
-                // 1. Collect Rent from occupied owned properties
+                // 1. Collect Rent
                 decimal totalRentCollected = 0m;
                 foreach (var prop in player.OwnedProperties.Where(p => p.IsOccupied))
                 {
                     totalRentCollected += prop.MonthlyRent;
                 }
 
-                // 2. Maintenance costs (0.5% - 1.0% per property)
+                // 2. Maintenance costs
                 decimal totalMaintenancePaid = 0m;
                 foreach (var prop in player.OwnedProperties)
                 {
@@ -203,7 +208,6 @@ namespace MetroHunt.Server.Services
                     }
                     else
                     {
-                        // Condition decays if maintenance cannot be covered
                         prop.Condition = Math.Max(10, prop.Condition - 10);
                         prop.MonthlyRent = Math.Round(prop.MonthlyRent * 0.90m, 2);
                     }
@@ -225,7 +229,6 @@ namespace MetroHunt.Server.Services
                     }
                     else
                     {
-                        // 5% default penalty added to principal
                         loan.Principal = Math.Round(loan.Principal * 1.05m, 2);
                         loan.RemainingBalance = Math.Round(loan.RemainingBalance * 1.05m, 2);
                     }
@@ -236,11 +239,37 @@ namespace MetroHunt.Server.Services
                     _context.Loans.Remove(paidOff);
                 }
 
-                // Apply cashflow net delta
                 decimal netCashflow = totalRentCollected - totalMaintenancePaid - totalLoanPaymentsPaid;
                 player.LiquidBalance += netCashflow;
 
-                // 4. Property Appreciation based on district & condition
+                // Log audit summary for the turn
+                if (totalRentCollected > 0)
+                {
+                    _context.AuditLogs.Add(new AuditLog
+                    {
+                        PlayerUserId = player.Id,
+                        ActionType = AuditActionType.RentalIncome,
+                        Description = $"Collected rent from {player.OwnedProperties.Count} properties",
+                        Amount = totalRentCollected,
+                        PostBalance = player.LiquidBalance,
+                        TurnNumber = session.CurrentRound
+                    });
+                }
+
+                if (totalMaintenancePaid > 0)
+                {
+                    _context.AuditLogs.Add(new AuditLog
+                    {
+                        PlayerUserId = player.Id,
+                        ActionType = AuditActionType.MaintenanceFee,
+                        Description = $"Paid facility maintenance on {player.OwnedProperties.Count} properties",
+                        Amount = -totalMaintenancePaid,
+                        PostBalance = player.LiquidBalance,
+                        TurnNumber = session.CurrentRound
+                    });
+                }
+
+                // 4. Property Appreciation
                 foreach (var prop in player.OwnedProperties)
                 {
                     decimal appreciationRate = prop.District switch
@@ -252,13 +281,12 @@ namespace MetroHunt.Server.Services
                         _ => 0.003m
                     };
 
-                    // Condition scale (100 = 1.0x, 50 = 0.5x)
                     appreciationRate *= (prop.Condition / 100.0m);
                     prop.Price = Math.Round(prop.Price * (1 + appreciationRate), 2);
                     prop.MonthlyRent = Math.Round(prop.Price * 0.008m, 2);
                 }
 
-                // 5. Market Events (15% chance per turn)
+                // 5. Market Events
                 string? triggeredEventTitle = null;
                 var activeEvents = await _context.MarketEvents.Where(e => e.IsActive).ToListAsync();
                 foreach (var evt in activeEvents)
@@ -276,7 +304,6 @@ namespace MetroHunt.Server.Services
                     _context.MarketEvents.Add(newEvent);
                     triggeredEventTitle = newEvent.Title;
 
-                    // Broadcast market event alert
                     await _hubContext.Clients.All.SendAsync("MarketEventTriggered", new
                     {
                         Title = newEvent.Title,
@@ -290,14 +317,12 @@ namespace MetroHunt.Server.Services
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                // 6. Check Victory Condition
-                bool won = await EvaluateWinConditionAsync(playerId);
+                await EvaluateWinConditionAsync(playerId);
 
                 decimal portfolioVal = player.OwnedProperties.Sum(p => p.Price);
                 decimal debt = player.ActiveLoans.Sum(l => l.RemainingBalance);
                 decimal netWorth = player.LiquidBalance + portfolioVal - debt;
 
-                // Broadcast turn advance event to all clients
                 await _hubContext.Clients.All.SendAsync("TurnAdvanced", new
                 {
                     Round = session.CurrentRound,
@@ -306,7 +331,6 @@ namespace MetroHunt.Server.Services
                     ActiveEvent = triggeredEventTitle
                 });
 
-                // Broadcast leaderboard update
                 var leaderboard = await GetLeaderboardAsync();
                 await _hubContext.Clients.All.SendAsync("RaceProgressUpdated", leaderboard);
 
@@ -331,6 +355,188 @@ namespace MetroHunt.Server.Services
                 _logger.LogError(ex, "Error advancing turn for player {PlayerId}", playerId);
                 throw;
             }
+        }
+
+        public async Task<RenovationResult> RenovatePropertyAsync(int propertyId, string playerId)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var property = await _context.Properties.FirstOrDefaultAsync(p => p.Id == propertyId);
+                if (property == null) return new RenovationResult { Success = false, Message = "Property not found." };
+                if (property.OwnerId != playerId) return new RenovationResult { Success = false, Message = "You do not own this property." };
+                if (property.Condition >= 100) return new RenovationResult { Success = false, Message = "This property is already in pristine (100%) condition!" };
+
+                var player = await _context.Users.FirstOrDefaultAsync(u => u.Id == playerId);
+                if (player == null) return new RenovationResult { Success = false, Message = "Player not found." };
+
+                decimal renovationCost = Math.Round(property.Price * 0.05m, 0); // 5% of property value
+                if (player.LiquidBalance < renovationCost)
+                {
+                    return new RenovationResult
+                    {
+                        Success = false,
+                        Message = $"Insufficient funds for capital renovation. Required: ${renovationCost:N0}, Available: ${player.LiquidBalance:N0}"
+                    };
+                }
+
+                player.LiquidBalance -= renovationCost;
+                property.Condition = 100;
+                property.Price = Math.Round(property.Price * 1.12m, 0); // 12% equity surge
+                property.MonthlyRent = Math.Round(property.Price * 0.009m, 0); // Boosted rental yield
+
+                var session = await GetOrCreateActiveSessionAsync();
+                _context.AuditLogs.Add(new AuditLog
+                {
+                    PlayerUserId = player.Id,
+                    PropertyId = property.Id,
+                    ActionType = AuditActionType.Renovation,
+                    Description = $"Completed capital renovation on {property.Title}. Upgraded to 100% condition & surged valuation.",
+                    Amount = -renovationCost,
+                    PostBalance = player.LiquidBalance,
+                    TurnNumber = session.CurrentRound
+                });
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                await _hubContext.Clients.All.SendAsync("PropertyRenovated", new
+                {
+                    PropertyId = property.Id,
+                    Title = property.Title,
+                    NewPrice = property.Price,
+                    NewRent = property.MonthlyRent,
+                    OwnerName = player.UserName
+                });
+
+                return new RenovationResult
+                {
+                    Success = true,
+                    Message = $"Renovation complete! {property.Title} condition restored to 100%. Valuation surged by 12%!",
+                    PropertyId = property.Id,
+                    NewCondition = 100,
+                    NewMonthlyRent = property.MonthlyRent,
+                    NewPrice = property.Price,
+                    NewBalance = player.LiquidBalance
+                };
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Error renovating property {PropertyId}", propertyId);
+                throw;
+            }
+        }
+
+        public async Task<HostileAuditResult> LaunchRegulatoryAuditAsync(int propertyId, string initiatingPlayerId)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var property = await _context.Properties
+                    .Include(p => p.Owner)
+                    .FirstOrDefaultAsync(p => p.Id == propertyId);
+
+                if (property == null) return new HostileAuditResult { Success = false, Message = "Property not found." };
+                if (string.IsNullOrEmpty(property.OwnerId) || property.OwnerId == initiatingPlayerId)
+                {
+                    return new HostileAuditResult { Success = false, Message = "You cannot launch a regulatory inspection on your own or unowned asset." };
+                }
+
+                var initiator = await _context.Users.FirstOrDefaultAsync(u => u.Id == initiatingPlayerId);
+                if (initiator == null) return new HostileAuditResult { Success = false, Message = "Initiating player not found." };
+
+                decimal auditFee = 25_000m; // Cost to initiate regulatory inquiry
+                if (initiator.LiquidBalance < auditFee)
+                {
+                    return new HostileAuditResult { Success = false, Message = $"Need ${auditFee:N0} to file regulatory inquiry." };
+                }
+
+                var targetOwner = property.Owner!;
+                initiator.LiquidBalance -= auditFee;
+
+                // Penalty on opponent's property
+                int conditionDrop = _rand.Next(15, 30);
+                property.Condition = Math.Max(20, property.Condition - conditionDrop);
+                decimal penaltyFine = Math.Round(property.Price * 0.02m, 0); // 2% compliance fine on opponent
+                targetOwner.LiquidBalance = Math.Max(0m, targetOwner.LiquidBalance - penaltyFine);
+                property.MonthlyRent = Math.Round(property.Price * 0.007m, 0); // Temporary yield reduction
+
+                var session = await GetOrCreateActiveSessionAsync();
+
+                _context.AuditLogs.Add(new AuditLog
+                {
+                    PlayerUserId = initiator.Id,
+                    PropertyId = property.Id,
+                    ActionType = AuditActionType.RegulatoryAudit,
+                    Description = $"Initiated municipal inspection on {property.Title} (Owner: {targetOwner.UserName})",
+                    Amount = -auditFee,
+                    PostBalance = initiator.LiquidBalance,
+                    TurnNumber = session.CurrentRound
+                });
+
+                _context.AuditLogs.Add(new AuditLog
+                {
+                    PlayerUserId = targetOwner.Id,
+                    PropertyId = property.Id,
+                    ActionType = AuditActionType.RegulatoryAudit,
+                    Description = $"Assessed code violation penalty on {property.Title} from competitor inquiry",
+                    Amount = -penaltyFine,
+                    PostBalance = targetOwner.LiquidBalance,
+                    TurnNumber = session.CurrentRound
+                });
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                await _hubContext.Clients.All.SendAsync("RegulatoryAuditTriggered", new
+                {
+                    InitiatorName = initiator.UserName,
+                    TargetName = targetOwner.UserName,
+                    PropertyTitle = property.Title,
+                    Penalty = penaltyFine,
+                    NewCondition = property.Condition
+                });
+
+                return new HostileAuditResult
+                {
+                    Success = true,
+                    Message = $"City inspectors cited code violations on {property.Title}! {targetOwner.UserName} fined ${penaltyFine:N0}.",
+                    TargetPlayerName = targetOwner.UserName ?? "Competitor",
+                    PropertyTitle = property.Title,
+                    PenaltyAssessed = penaltyFine,
+                    NewCondition = property.Condition
+                };
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Error launching regulatory audit on property {PropertyId}", propertyId);
+                throw;
+            }
+        }
+
+        public async Task<List<AuditLogDto>> GetAuditLogsAsync(string playerId)
+        {
+            var logs = await _context.AuditLogs
+                .Include(a => a.Property)
+                .Where(a => a.PlayerUserId == playerId)
+                .OrderByDescending(a => a.Id)
+                .Take(25)
+                .Select(a => new AuditLogDto
+                {
+                    Id = a.Id,
+                    ActionType = a.ActionType.ToString(),
+                    Description = a.Description,
+                    Amount = a.Amount,
+                    PostBalance = a.PostBalance,
+                    TurnNumber = a.TurnNumber,
+                    Timestamp = a.Timestamp,
+                    PropertyTitle = a.Property != null ? a.Property.Title : null
+                })
+                .ToListAsync();
+
+            return logs;
         }
 
         public async Task<bool> EvaluateWinConditionAsync(string playerId)
@@ -365,7 +571,6 @@ namespace MetroHunt.Server.Services
                 _logger.LogInformation("VICTORY! Player {PlayerName} reached ${NetWorth:N0} (Target: ${Target:N0})",
                     player.UserName, netWorth, session.TargetNetWorth);
 
-                // Broadcast victory to all connected clients over SignalR WebSockets
                 await _hubContext.Clients.All.SendAsync("VictoryAchieved", new
                 {
                     WinnerId = player.Id,
@@ -392,7 +597,6 @@ namespace MetroHunt.Server.Services
                 var street = StreetNames[_rand.Next(StreetNames.Length)];
                 int streetNum = _rand.Next(100, 9999);
 
-                // Base Pricing from legacy formulas
                 decimal basePrice = type switch
                 {
                     "Apartment" => 50_000m,
@@ -402,7 +606,6 @@ namespace MetroHunt.Server.Services
                     _ => 100_000m
                 };
 
-                // District multipliers
                 decimal districtMultiplier = district switch
                 {
                     "Financial" => 1.6m,
@@ -423,7 +626,7 @@ namespace MetroHunt.Server.Services
                     Type = type,
                     Price = finalPrice,
                     MonthlyRent = monthlyRent,
-                    Condition = _rand.Next(75, 100),
+                    Condition = _rand.Next(65, 95),
                     IsOccupied = false,
                     OwnerId = null
                 };
@@ -484,14 +687,13 @@ namespace MetroHunt.Server.Services
                 return new TakeLoanResult { Success = false, Message = "Player not found." };
             }
 
-            // Cap at 3 concurrent loans
             if (player.ActiveLoans.Count >= 3)
             {
                 return new TakeLoanResult { Success = false, Message = "Maximum credit limit reached (Max 3 concurrent bank loans)." };
             }
 
-            decimal interestRate = 0.0650m; // 6.5% interest
-            decimal monthlyPayment = Math.Round((principal * (1 + interestRate)) / 24, 2); // 24-turn loan
+            decimal interestRate = 0.0650m;
+            decimal monthlyPayment = Math.Round((principal * (1 + interestRate)) / 24, 2);
 
             var loan = new Loan
             {
@@ -505,9 +707,20 @@ namespace MetroHunt.Server.Services
             player.LiquidBalance += principal;
             _context.Loans.Add(loan);
 
+            var session = await GetOrCreateActiveSessionAsync();
+            _context.AuditLogs.Add(new AuditLog
+            {
+                PlayerUserId = player.Id,
+                ActionType = AuditActionType.DebtService,
+                Description = $"Drew commercial credit facility of ${principal:N0} at {(interestRate * 100):N1}% APR",
+                Amount = principal,
+                PostBalance = player.LiquidBalance,
+                TurnNumber = session.CurrentRound
+            });
+
             await _context.SaveChangesAsync();
 
-            decimal totalDebt = player.ActiveLoans.Sum(l => l.RemainingBalance) + loan.RemainingBalance;
+            decimal totalDebt = player.ActiveLoans.Sum(l => l.RemainingBalance);
 
             return new TakeLoanResult
             {
@@ -531,16 +744,19 @@ namespace MetroHunt.Server.Services
                 session.CompletedAt = null;
             }
 
-            // Reset players balances and owned properties
             var properties = await _context.Properties.ToListAsync();
             foreach (var p in properties)
             {
                 p.OwnerId = null;
                 p.IsOccupied = false;
+                p.Condition = _rand.Next(70, 95);
             }
 
             var loans = await _context.Loans.ToListAsync();
             _context.Loans.RemoveRange(loans);
+
+            var logs = await _context.AuditLogs.ToListAsync();
+            _context.AuditLogs.RemoveRange(logs);
 
             var players = await _context.Users.ToListAsync();
             foreach (var pl in players)
@@ -550,7 +766,6 @@ namespace MetroHunt.Server.Services
             }
 
             await _context.SaveChangesAsync();
-
             await _hubContext.Clients.All.SendAsync("GameReset", new { Message = "Game has been reset to starting state." });
         }
 

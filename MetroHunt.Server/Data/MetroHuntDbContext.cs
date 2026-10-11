@@ -15,6 +15,7 @@ namespace MetroHunt.Server.Data
         public DbSet<Loan> Loans => Set<Loan>();
         public DbSet<MarketEvent> MarketEvents => Set<MarketEvent>();
         public DbSet<GameSession> GameSessions => Set<GameSession>();
+        public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -78,6 +79,25 @@ namespace MetroHunt.Server.Data
 
                 entity.Property(s => s.WinningNetWorth)
                     .HasPrecision(18, 2);
+            });
+
+            builder.Entity<AuditLog>(entity =>
+            {
+                entity.Property(a => a.Amount)
+                    .HasPrecision(18, 2);
+
+                entity.Property(a => a.PostBalance)
+                    .HasPrecision(18, 2);
+
+                entity.HasOne(a => a.PlayerUser)
+                    .WithMany()
+                    .HasForeignKey(a => a.PlayerUserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(a => a.Property)
+                    .WithMany()
+                    .HasForeignKey(a => a.PropertyId)
+                    .OnDelete(DeleteBehavior.SetNull);
             });
         }
     }

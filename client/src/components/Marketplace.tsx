@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShoppingBag, Sparkles, Lock } from 'lucide-react';
+import { ShoppingBag, Sparkles, Lock, ShieldAlert } from 'lucide-react';
 
 export interface MarketProperty {
   id: number;
@@ -20,8 +20,10 @@ interface MarketplaceProps {
   liquidBalance: number;
   currentUserId?: string;
   onBuyProperty: (propertyId: number, rowVersion: string) => void;
+  onAuditProperty: (propertyId: number) => void;
   onGenerateProperties: () => void;
   isBuying: boolean;
+  isAuditing: boolean;
 }
 
 export const Marketplace: React.FC<MarketplaceProps> = ({
@@ -29,8 +31,10 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   liquidBalance,
   currentUserId,
   onBuyProperty,
+  onAuditProperty,
   onGenerateProperties,
-  isBuying
+  isBuying,
+  isAuditing
 }) => {
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl mb-6">
@@ -41,7 +45,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
             Live Property Marketplace
           </h3>
           <p className="text-xs text-slate-400">
-            Acquire real estate across districts with optimistic concurrency locking
+            Acquire real estate across districts with optimistic concurrency locking & competitor audits
           </p>
         </div>
 
@@ -58,14 +62,18 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         {properties.map((prop) => {
           const isOwned = !!prop.ownerId;
           const isOwnedByMe = prop.ownerId === currentUserId;
+          const isOwnedByRival = isOwned && !isOwnedByMe;
           const canAfford = liquidBalance >= prop.price && !isOwned;
+          const canAffordAudit = liquidBalance >= 25_000 && isOwnedByRival;
 
           return (
             <div
               key={prop.id}
               className={`border rounded-2xl p-4 flex flex-col justify-between transition-all relative overflow-hidden ${
-                isOwned
-                  ? 'bg-slate-950/60 border-slate-800/80 opacity-75'
+                isOwnedByMe
+                  ? 'bg-slate-950/60 border-emerald-500/30 shadow-md'
+                  : isOwnedByRival
+                  ? 'bg-slate-950/60 border-slate-800/80 shadow-md'
                   : 'bg-slate-950 border-slate-800 hover:border-slate-700 shadow-lg'
               }`}
             >
@@ -113,14 +121,33 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 </div>
               </div>
 
-              {/* Action Button */}
+              {/* Action Buttons */}
               {isOwned ? (
-                <div className="py-2.5 px-3 rounded-xl bg-slate-900 border border-slate-800 text-center text-xs font-mono text-slate-400 flex items-center justify-center gap-1.5">
-                  <Lock size={12} className="text-slate-500" />
-                  {isOwnedByMe ? (
-                    <span className="text-emerald-400 font-bold">Held in your portfolio</span>
-                  ) : (
-                    <span>Acquired by {prop.ownerName || 'Another Investor'}</span>
+                <div className="space-y-2">
+                  <div className="py-2 px-3 rounded-xl bg-slate-900 border border-slate-800 text-center text-xs font-mono text-slate-400 flex items-center justify-center gap-1.5">
+                    <Lock size={12} className="text-slate-500" />
+                    {isOwnedByMe ? (
+                      <span className="text-emerald-400 font-bold">Held in your portfolio</span>
+                    ) : (
+                      <span>Acquired by {prop.ownerName || 'Rival Investor'}</span>
+                    )}
+                  </div>
+
+                  {/* Hostile Sabotage / Regulatory Inspection on Rival's Asset */}
+                  {isOwnedByRival && (
+                    <button
+                      disabled={!canAffordAudit || isAuditing}
+                      onClick={() => onAuditProperty(prop.id)}
+                      className={`w-full py-2 px-3 rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        canAffordAudit
+                          ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                          : 'bg-slate-950 text-slate-600 border border-slate-900 cursor-not-allowed'
+                      }`}
+                      title="File city safety inspection against rival asset ($25k fee)"
+                    >
+                      <ShieldAlert size={13} className={canAffordAudit ? 'text-rose-400' : ''} />
+                      File Safety Audit ($25k)
+                    </button>
                   )}
                 </div>
               ) : (

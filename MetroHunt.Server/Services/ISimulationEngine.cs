@@ -11,6 +11,9 @@ namespace MetroHunt.Server.Services
         Task<bool> EvaluateWinConditionAsync(string playerId);
         Task<List<LeaderboardEntryDto>> GetLeaderboardAsync();
         Task<TakeLoanResult> TakeLoanAsync(string playerId, decimal principal);
+        Task<RenovationResult> RenovatePropertyAsync(int propertyId, string playerId);
+        Task<HostileAuditResult> LaunchRegulatoryAuditAsync(int propertyId, string initiatingPlayerId);
+        Task<List<AuditLogDto>> GetAuditLogsAsync(string playerId);
         Task<GameSession> GetOrCreateActiveSessionAsync();
         Task ResetGameAsync();
     }

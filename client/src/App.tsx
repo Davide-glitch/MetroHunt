@@ -9,6 +9,8 @@ import type { MarketProperty } from './components/Marketplace';
 import { LoanModal } from './components/LoanModal';
 import { AuthModal } from './components/AuthModal';
 import { VictoryModal } from './components/VictoryModal';
+import { AuditLedger } from './components/AuditLedger';
+import type { AuditLogItem } from './components/AuditLedger';
 import { useGameHub } from './hooks/useGameHub';
 import type { VictoryData } from './hooks/useGameHub';
 import { Sparkles } from 'lucide-react';
@@ -23,6 +25,7 @@ export function App() {
   const [targetNetWorth, setTargetNetWorth] = useState<number>(100_000_000);
   const [ownedProperties, setOwnedProperties] = useState<OwnedProperty[]>([]);
   const [marketProperties, setMarketProperties] = useState<MarketProperty[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   
   // UI Modals & Actions
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
@@ -30,6 +33,8 @@ export function App() {
   const [victoryData, setVictoryData] = useState<VictoryData | null>(null);
   const [isAdvancing, setIsAdvancing] = useState<boolean>(false);
   const [isBuying, setIsBuying] = useState<boolean>(false);
+  const [isRenovating, setIsRenovating] = useState<boolean>(false);
+  const [isAuditing, setIsAuditing] = useState<boolean>(false);
   const [isTakingLoan, setIsTakingLoan] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -45,25 +50,41 @@ export function App() {
     onVictory: (data: VictoryData) => {
       setVictoryData(data);
       showToast(`🏆 Game Over! ${data.winnerName} crossed the target!`);
+      fetchAuditLogs();
     },
     onPropertyPurchased: (data: any) => {
       showToast(`⚡ Market Shift: ${data.buyerName} acquired ${data.title}!`);
       fetchMarketProperties();
       fetchUserData();
+      fetchAuditLogs();
     },
     onTurnAdvanced: (data: any) => {
       showToast(`Turn ${data.round} processed for ${data.playerName} (Net: $${data.netCashflow?.toLocaleString()})`);
       fetchMarketProperties();
       fetchUserData();
+      fetchAuditLogs();
     },
     onMarketEvent: (data: any) => {
       showToast(`📢 Macro Alert: ${data.title} - ${data.description}`);
+    },
+    onPropertyRenovated: (data: any) => {
+      showToast(`🔧 Capital Upgrade: ${data.ownerName} renovated ${data.title} to 100%!`);
+      fetchMarketProperties();
+      fetchUserData();
+      fetchAuditLogs();
+    },
+    onRegulatoryAuditTriggered: (data: any) => {
+      showToast(`🚨 Code Violation: ${data.investorName} filed inspection on ${data.targetProperty}! Penalty: $${data.penaltyAmount?.toLocaleString()}`);
+      fetchMarketProperties();
+      fetchUserData();
+      fetchAuditLogs();
     },
     onGameReset: () => {
       setVictoryData(null);
       showToast('Game state has been reset.');
       fetchUserData();
       fetchMarketProperties();
+      fetchAuditLogs();
     }
   });
 
@@ -132,10 +153,24 @@ export function App() {
     }
   };
 
+  // Fetch Audit Logs
+  const fetchAuditLogs = async () => {
+    try {
+      const res = await fetch('/api/market/audit-logs');
+      if (res.ok) {
+        const data = await res.json();
+        setAuditLogs(data);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch audit logs: ', err);
+    }
+  };
+
   useEffect(() => {
     fetchUserData();
     fetchMarketProperties();
     fetchSession();
+    fetchAuditLogs();
   }, [token]);
 
   // Auth Handlers
@@ -264,6 +299,62 @@ export function App() {
     }
   };
 
+  // Renovate Property
+  const handleRenovateProperty = async (propertyId: number) => {
+    setIsRenovating(true);
+    try {
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`/api/market/renovate/${propertyId}`, {
+        method: 'POST',
+        headers
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(data.message);
+        fetchUserData();
+        fetchMarketProperties();
+        fetchAuditLogs();
+      } else {
+        showToast(data.message || 'Renovation declined.');
+      }
+    } catch (err: any) {
+      showToast(`Renovation error: ${err.message}`);
+    } finally {
+      setIsRenovating(false);
+    }
+  };
+
+  // Launch Regulatory Safety Audit on Competitor Property
+  const handleAuditProperty = async (propertyId: number) => {
+    setIsAuditing(true);
+    try {
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`/api/market/audit/${propertyId}`, {
+        method: 'POST',
+        headers
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(data.message);
+        fetchUserData();
+        fetchMarketProperties();
+        fetchAuditLogs();
+      } else {
+        showToast(data.message || 'Regulatory audit aborted.');
+      }
+    } catch (err: any) {
+      showToast(`Audit error: ${err.message}`);
+    } finally {
+      setIsAuditing(false);
+    }
+  };
+
   // Procedural Property Seeding
   const handleGenerateProperties = async () => {
     try {
@@ -367,7 +458,12 @@ export function App() {
         />
 
         {/* Portfolio Table */}
-        <PortfolioTable properties={ownedProperties} />
+        <PortfolioTable
+          properties={ownedProperties}
+          liquidBalance={user?.liquidBalance || 100_000}
+          onRenovate={handleRenovateProperty}
+          isRenovating={isRenovating}
+        />
 
         {/* Marketplace */}
         <Marketplace
@@ -375,8 +471,16 @@ export function App() {
           liquidBalance={user?.liquidBalance || 100_000}
           currentUserId={user?.id}
           onBuyProperty={handleBuyProperty}
+          onAuditProperty={handleAuditProperty}
           onGenerateProperties={handleGenerateProperties}
           isBuying={isBuying}
+          isAuditing={isAuditing}
+        />
+
+        {/* Audit Ledger */}
+        <AuditLedger
+          logs={auditLogs}
+          onRefresh={fetchAuditLogs}
         />
       </main>
 

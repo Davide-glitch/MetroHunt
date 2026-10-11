@@ -57,7 +57,6 @@ namespace MetroHunt.Server.Controllers
             string? playerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(playerId))
             {
-                // Fallback for direct browser testing without header
                 var defaultPlayer = await _context.Users.FirstOrDefaultAsync();
                 if (defaultPlayer == null) return Unauthorized("No registered player.");
                 playerId = defaultPlayer.Id;
@@ -72,7 +71,7 @@ namespace MetroHunt.Server.Controllers
                 }
                 catch
                 {
-                    // Ignore decoding error, engine will perform fresh DB version check
+                    // Ignore decoding error
                 }
             }
 
@@ -83,6 +82,61 @@ namespace MetroHunt.Server.Controllers
             }
 
             return Ok(result);
+        }
+
+        [HttpPost("renovate/{propertyId}")]
+        public async Task<IActionResult> RenovateProperty(int propertyId)
+        {
+            string? playerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(playerId))
+            {
+                var defaultPlayer = await _context.Users.FirstOrDefaultAsync();
+                if (defaultPlayer == null) return Unauthorized("No registered player.");
+                playerId = defaultPlayer.Id;
+            }
+
+            var result = await _engine.RenovatePropertyAsync(propertyId, playerId);
+            if (!result.Success)
+            {
+                return BadRequest(result);
+            }
+
+            return Ok(result);
+        }
+
+        [HttpPost("audit/{propertyId}")]
+        public async Task<IActionResult> LaunchRegulatoryAudit(int propertyId)
+        {
+            string? playerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(playerId))
+            {
+                var defaultPlayer = await _context.Users.FirstOrDefaultAsync();
+                if (defaultPlayer == null) return Unauthorized("No registered player.");
+                playerId = defaultPlayer.Id;
+            }
+
+            var result = await _engine.LaunchRegulatoryAuditAsync(propertyId, playerId);
+            if (!result.Success)
+            {
+                return BadRequest(result);
+            }
+
+            return Ok(result);
+        }
+
+        [HttpGet("audit-logs")]
+        public async Task<IActionResult> GetAuditLogs()
+        {
+            string? playerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(playerId))
+            {
+                var defaultPlayer = await _context.Users.FirstOrDefaultAsync();
+                if (defaultPlayer == null) return Unauthorized("No registered player.");
+                playerId = defaultPlayer.Id;
+            }
+
+            var logs = await _engine.GetAuditLogsAsync(playerId);
+            return Ok(logs);
         }
 
         [HttpPost("generate")]

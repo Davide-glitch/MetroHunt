@@ -27,6 +27,8 @@ interface UseGameHubProps {
   onPropertyPurchased?: (data: any) => void;
   onTurnAdvanced?: (data: any) => void;
   onMarketEvent?: (data: any) => void;
+  onPropertyRenovated?: (data: any) => void;
+  onRegulatoryAuditTriggered?: (data: any) => void;
   onGameReset?: () => void;
 }
 
@@ -37,6 +39,8 @@ export const useGameHub = ({
   onPropertyPurchased,
   onTurnAdvanced,
   onMarketEvent,
+  onPropertyRenovated,
+  onRegulatoryAuditTriggered,
   onGameReset
 }: UseGameHubProps) => {
   const [isConnected, setIsConnected] = useState<boolean>(false);
@@ -75,6 +79,14 @@ export const useGameHub = ({
 
     connection.on('MarketEventTriggered', (data) => {
       if (onMarketEvent) onMarketEvent(data);
+    });
+
+    connection.on('PropertyRenovated', (data) => {
+      if (onPropertyRenovated) onPropertyRenovated(data);
+    });
+
+    connection.on('RegulatoryAuditTriggered', (data) => {
+      if (onRegulatoryAuditTriggered) onRegulatoryAuditTriggered(data);
     });
 
     connection.on('GameReset', () => {

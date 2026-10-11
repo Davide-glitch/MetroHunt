@@ -43,4 +43,37 @@ namespace MetroHunt.Server.DTOs
         public decimal NewBalance { get; set; }
         public decimal NewDebt { get; set; }
     }
+
+    public class RenovationResult
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public int PropertyId { get; set; }
+        public int NewCondition { get; set; }
+        public decimal NewMonthlyRent { get; set; }
+        public decimal NewPrice { get; set; }
+        public decimal NewBalance { get; set; }
+    }
+
+    public class HostileAuditResult
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public string TargetPlayerName { get; set; } = string.Empty;
+        public string PropertyTitle { get; set; } = string.Empty;
+        public decimal PenaltyAssessed { get; set; }
+        public int NewCondition { get; set; }
+    }
+
+    public class AuditLogDto
+    {
+        public int Id { get; set; }
+        public string ActionType { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public decimal Amount { get; set; }
+        public decimal PostBalance { get; set; }
+        public int TurnNumber { get; set; }
+        public DateTime Timestamp { get; set; }
+        public string? PropertyTitle { get; set; }
+    }
 }
