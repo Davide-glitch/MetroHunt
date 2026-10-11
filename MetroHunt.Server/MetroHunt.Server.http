@@ -1,0 +1,6 @@
+@MetroHunt.Server_HostAddress = http://localhost:5085
+
+GET {{MetroHunt.Server_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
