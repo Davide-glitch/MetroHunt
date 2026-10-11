@@ -11,6 +11,7 @@ import { AuthModal } from './components/AuthModal';
 import { VictoryModal } from './components/VictoryModal';
 import { AuditLedger } from './components/AuditLedger';
 import type { AuditLogItem } from './components/AuditLedger';
+import { LoginPage } from './components/LoginPage';
 import { useGameHub } from './hooks/useGameHub';
 import type { VictoryData } from './hooks/useGameHub';
 import { Sparkles } from 'lucide-react';
@@ -110,12 +111,12 @@ export function App() {
         setNetWorth(data.netWorth);
         setTurnsSurvived(data.turnsSurvived);
         setOwnedProperties(data.ownedProperties || []);
-      } else if (!token && !user) {
-        // Fallback demo profile only on initial empty load if no token exists
-        handleLogin('player1@metrohunt.com', 'password123').catch(() => {});
+      } else {
+        setUser(null);
       }
     } catch (err) {
       console.warn('Failed to fetch user state: ', err);
+      setUser(null);
     }
   };
 
@@ -465,6 +466,17 @@ export function App() {
       console.warn(err);
     }
   };
+
+  // If not logged in, render the dedicated LoginPage first
+  if (!user || !token) {
+    return (
+      <LoginPage
+        onLogin={handleLogin}
+        onRegister={handleRegister}
+        onGoogleLogin={handleGoogleLogin}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950">

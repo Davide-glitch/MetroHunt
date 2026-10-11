@@ -136,6 +136,25 @@ using (var scope = app.Services.CreateScope())
         var context = services.GetRequiredService<MetroHuntDbContext>();
         context.Database.EnsureCreated();
 
+        // Ensure AuditLogs table exists if database was created prior to AuditLog model addition
+        try
+        {
+            context.Database.ExecuteSqlRaw(@"
+                IF OBJECT_ID('AuditLogs', 'U') IS NULL
+                CREATE TABLE AuditLogs (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    PlayerUserId NVARCHAR(450) NOT NULL,
+                    PropertyId INT NULL,
+                    ActionType INT NOT NULL,
+                    Description NVARCHAR(250) NOT NULL,
+                    Amount DECIMAL(18,2) NOT NULL,
+                    PostBalance DECIMAL(18,2) NOT NULL,
+                    TurnNumber INT NOT NULL,
+                    Timestamp DATETIME2 NOT NULL
+                );");
+        }
+        catch { }
+
         // Ensure active game session exists
         if (!context.GameSessions.Any())
         {
