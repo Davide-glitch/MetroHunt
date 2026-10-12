@@ -35,7 +35,7 @@ namespace MetroHunt.Server.Controllers
         }
 
         [HttpPost("work")]
-        public async Task<IActionResult> WorkDeal()
+        public async Task<IActionResult> WorkDeal([FromQuery] string tier = "quick")
         {
             string? playerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(playerId))
@@ -45,7 +45,7 @@ namespace MetroHunt.Server.Controllers
                 playerId = defaultPlayer.Id;
             }
 
-            var result = await _engine.WorkDealAsync(playerId);
+            var result = await _engine.WorkDealAsync(playerId, tier);
             if (!result.Success)
             {
                 return BadRequest(result);

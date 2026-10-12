@@ -1,5 +1,5 @@
 import React from 'react';
-import { Building2, User, Landmark, RotateCcw, Play, Radio, LogOut, Briefcase } from 'lucide-react';
+import { Building2, User, Landmark, RotateCcw, Play, Radio, LogOut, Briefcase, Users } from 'lucide-react';
 
 interface NavbarProps {
   userName?: string;
@@ -12,6 +12,7 @@ interface NavbarProps {
   isAdvancing: boolean;
   onResetGame: () => void;
   onLogout: () => void;
+  onReturnToLobby?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -24,7 +25,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onAdvanceTurn,
   isAdvancing,
   onResetGame,
-  onLogout
+  onLogout,
+  onReturnToLobby
 }) => {
   return (
     <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
@@ -56,6 +58,18 @@ export const Navbar: React.FC<NavbarProps> = ({
               {isSignalRConnected ? 'SignalR Live' : 'Reconnecting...'}
             </span>
           </div>
+
+          {/* Lobby / Match Room Navigation */}
+          {onReturnToLobby && (
+            <button
+              onClick={onReturnToLobby}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-500/30 transition-colors cursor-pointer"
+              title="Return to Multiplayer Lobby / Match Settings"
+            >
+              <Users size={14} className="text-cyan-400" />
+              <span className="hidden sm:inline">Lobby Lounge</span>
+            </button>
+          )}
 
           {/* Bank Loan Button */}
           <button

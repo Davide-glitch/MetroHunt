@@ -586,7 +586,7 @@ namespace MetroHunt.Server.Services
             return false;
         }
 
-        public async Task<WorkDealResult> WorkDealAsync(string playerId)
+        public async Task<WorkDealResult> WorkDealAsync(string playerId, string tier = "quick")
         {
             var player = await _context.Users
                 .Include(u => u.OwnedProperties)
@@ -604,20 +604,48 @@ namespace MetroHunt.Server.Services
                 return new WorkDealResult { Success = false, Message = "Simulation session has completed. Reset game to start anew." };
             }
 
-            string[] dealTypes = new[]
+            string[] quickDeals = new[]
             {
-                "Commercial Real Estate Brokerage Fee",
+                "Wholesale Contract Assignment Fee",
                 "Off-Market Architectural Consulting",
-                "Municipal Zoning Advisory Contract",
-                "High-Yield Mezzanine Syndication Fee",
-                "Luxury Penthouse Staging Commission",
-                "Corporate Relocation Advisory Fee"
+                "Luxury Staging Commission"
             };
 
-            string dealTitle = dealTypes[_rand.Next(dealTypes.Length)];
-            // Earn between $5,000 and $15,000 per deal, scaling with turns survived
-            decimal baseReward = _rand.Next(5000, 15000);
-            decimal bonusFromExperience = Math.Min(25000m, player.TurnsSurvived * 500m);
+            string[] syndicateDeals = new[]
+            {
+                "Commercial Retail Syndicate Brokerage Fee",
+                "High-Yield Mezzanine Financing Fee",
+                "Municipal Zoning Re-Classification Contract"
+            };
+
+            string[] institutionalDeals = new[]
+            {
+                "Institutional REIT Portfolio M&A Advisory",
+                "Downtown Skyline Land Assembly Commission",
+                "Multi-Family Capital Restructuring Advisory"
+            };
+
+            string dealTitle;
+            decimal baseReward;
+            
+            switch (tier?.ToLowerInvariant())
+            {
+                case "syndicate":
+                    dealTitle = syndicateDeals[_rand.Next(syndicateDeals.Length)];
+                    baseReward = _rand.Next(18000, 38000);
+                    break;
+                case "institutional":
+                    dealTitle = institutionalDeals[_rand.Next(institutionalDeals.Length)];
+                    baseReward = _rand.Next(55000, 125000);
+                    break;
+                case "quick":
+                default:
+                    dealTitle = quickDeals[_rand.Next(quickDeals.Length)];
+                    baseReward = _rand.Next(5000, 12000);
+                    break;
+            }
+
+            decimal bonusFromExperience = Math.Min(35000m, player.TurnsSurvived * 800m);
             decimal totalEarned = baseReward + bonusFromExperience;
 
             player.LiquidBalance += totalEarned;

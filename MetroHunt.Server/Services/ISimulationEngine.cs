@@ -12,7 +12,7 @@ namespace MetroHunt.Server.Services
         Task<List<LeaderboardEntryDto>> GetLeaderboardAsync();
         Task<TakeLoanResult> TakeLoanAsync(string playerId, decimal principal);
         Task<RenovationResult> RenovatePropertyAsync(int propertyId, string playerId);
-        Task<WorkDealResult> WorkDealAsync(string playerId);
+        Task<WorkDealResult> WorkDealAsync(string playerId, string tier = "quick");
         Task<HostileAuditResult> LaunchRegulatoryAuditAsync(int propertyId, string initiatingPlayerId);
         Task<List<AuditLogDto>> GetAuditLogsAsync(string playerId);
         Task<GameSession> GetOrCreateActiveSessionAsync();
