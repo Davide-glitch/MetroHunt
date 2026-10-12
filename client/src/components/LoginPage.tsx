@@ -1,5 +1,18 @@
 import React, { useState } from 'react';
-import { Building2, Mail, Lock, User, CheckCircle2, AlertCircle, Smartphone, KeyRound, ArrowRight, ShieldCheck, X } from 'lucide-react';
+import { 
+  Mail, 
+  Lock, 
+  User, 
+  CheckCircle2, 
+  AlertCircle, 
+  Smartphone, 
+  KeyRound, 
+  ArrowRight, 
+  ShieldCheck, 
+  X, 
+  Loader2, 
+  Sparkles 
+} from 'lucide-react';
 
 interface LoginPageProps {
   onLogin: (email: string, password?: string) => Promise<void>;
@@ -25,9 +38,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   // 6-digit OTP fields
   const [otpCode, setOtpCode] = useState('');
   const [codeSent, setCodeSent] = useState(false);
+  const [generatedCode, setGeneratedCode] = useState<string | null>(null);
+  const [emailDelivered, setEmailDelivered] = useState<boolean>(false);
 
   // Google Account Chooser Modal state
   const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
+  const [googleLoadingAccount, setGoogleLoadingAccount] = useState<{ email: string; name: string } | null>(null);
+  const [googleModalError, setGoogleModalError] = useState<string | null>(null);
   const [customGoogleEmail, setCustomGoogleEmail] = useState('');
   const [customGoogleName, setCustomGoogleName] = useState('');
   const [showCustomGoogleInput, setShowCustomGoogleInput] = useState(false);
@@ -53,7 +70,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       const res = await fetch('/api/auth/send-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email: email.trim() })
       });
 
       const data = await res.json();
@@ -62,7 +79,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       }
 
       setCodeSent(true);
-      setSuccessMsg(`Verification code sent to ${email}! Please check your email inbox and enter the 6 digits below.`);
+      if (data.code) {
+        setGeneratedCode(data.code);
+        setOtpCode(data.code);
+      }
+      setEmailDelivered(!!data.emailDelivered);
+
+      if (data.emailDelivered) {
+        setSuccessMsg(`Verification code sent to ${email}! Check your inbox (also auto-filled below).`);
+      } else {
+        setSuccessMsg(`One-Time Passcode generated! (Code auto-filled below — click Verify to enter).`);
+      }
     } catch (err: any) {
       setError(err.message || 'Could not send verification code.');
     } finally {
@@ -86,9 +113,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email,
+          email: email.trim(),
           code: otpCode.trim(),
-          userName: userName || email.split('@')[0],
+          userName: userName.trim() || email.split('@')[0],
           password: password || 'MetroHunt@2026!'
         })
       });
@@ -106,7 +133,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           liquidBalance: data.liquidBalance
         });
       } else {
-        await onLogin(email, password || 'MetroHunt@2026!');
+        await onLogin(email.trim(), password || 'MetroHunt@2026!');
       }
     } catch (err: any) {
       setError(err.message || 'Invalid verification code.');
@@ -129,10 +156,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
     try {
       if (authMode === 'register') {
-        await onRegister(email, userName || email.split('@')[0], password);
+        await onRegister(email.trim(), userName.trim() || email.split('@')[0], password);
         setSuccessMsg(`Account created for ${email}! Entering Metro Hunt...`);
       } else {
-        await onLogin(email, password);
+        await onLogin(email.trim(), password);
       }
     } catch (err: any) {
       setError(err.message || 'Authentication failed. Please verify credentials.');
@@ -143,15 +170,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
   // 4. Handle Google Account Click
   const handleSelectGoogleAccount = async (accountEmail: string, accountName: string) => {
-    setLoading(true);
+    setGoogleLoadingAccount({ email: accountEmail, name: accountName });
+    setGoogleModalError(null);
     setError(null);
+
     try {
       await onGoogleLogin(accountEmail, accountName);
+      // Success will cause parent App component to update user state and navigate
       setIsGoogleModalOpen(false);
     } catch (err: any) {
-      setError(err.message || 'Google authentication failed.');
+      setGoogleModalError(err.message || 'Google authentication failed.');
     } finally {
-      setLoading(false);
+      setGoogleLoadingAccount(null);
     }
   };
 
@@ -164,9 +194,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       <div className="w-full max-w-md relative z-10">
         {/* Brand Banner */}
         <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500 to-cyan-500 mx-auto flex items-center justify-center text-slate-950 font-black shadow-xl shadow-emerald-500/20 mb-3">
-            <Building2 size={30} />
-          </div>
+          <img 
+            src="/metrohunt-icon.jpg" 
+            alt="Metro Hunt Logo" 
+            className="w-16 h-16 rounded-2xl object-cover mx-auto shadow-2xl shadow-cyan-500/30 border border-cyan-500/30 mb-3" 
+          />
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-100">
             METRO HUNT
           </h1>
@@ -185,9 +217,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           <div className="mb-6">
             <button
               type="button"
-              onClick={() => setIsGoogleModalOpen(true)}
+              onClick={() => {
+                setGoogleModalError(null);
+                setGoogleLoadingAccount(null);
+                setIsGoogleModalOpen(true);
+              }}
               disabled={loading}
-              className="w-full py-3 px-4 rounded-xl border border-slate-700/80 bg-slate-950 hover:bg-slate-850 hover:border-slate-600 text-slate-100 text-xs font-semibold flex items-center justify-center gap-3 transition-all cursor-pointer shadow-sm hover:shadow-md active:scale-[0.99]"
+              className="w-full py-3.5 px-4 rounded-xl border border-slate-700/80 bg-slate-950 hover:bg-slate-850 hover:border-slate-600 text-slate-100 text-xs font-semibold flex items-center justify-center gap-3 transition-all cursor-pointer shadow-sm hover:shadow-md active:scale-[0.99]"
             >
               <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -215,7 +251,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 setError(null);
                 setSuccessMsg(null);
               }}
-              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                 authMode === 'otp'
                   ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-md'
                   : 'text-slate-400 hover:text-slate-200'
@@ -231,7 +267,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 setError(null);
                 setSuccessMsg(null);
               }}
-              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                 authMode === 'password'
                   ? 'bg-slate-800 text-slate-100 shadow-md'
                   : 'text-slate-400 hover:text-slate-200'
@@ -246,7 +282,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 setError(null);
                 setSuccessMsg(null);
               }}
-              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                 authMode === 'register'
                   ? 'bg-slate-800 text-slate-100 shadow-md'
                   : 'text-slate-400 hover:text-slate-200'
@@ -312,7 +348,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 text-xs font-bold tracking-wide uppercase shadow-lg shadow-emerald-500/20 transition-all cursor-pointer flex items-center justify-center gap-2"
                   >
                     {loading ? (
-                      <span>Sending Code to Email...</span>
+                      <span className="flex items-center gap-2">
+                        <Loader2 size={14} className="animate-spin" />
+                        <span>Sending Code...</span>
+                      </span>
                     ) : (
                       <>
                         <span>Send 6-Digit Verification Code</span>
@@ -323,6 +362,22 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 </form>
               ) : (
                 <form onSubmit={handleVerifyCode} className="space-y-4 animate-in fade-in">
+                  
+                  {/* Generated Code Quick Banner */}
+                  {generatedCode && (
+                    <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-center space-y-1">
+                      <div className="text-[11px] font-mono text-emerald-400 uppercase tracking-wider font-semibold">
+                        {emailDelivered ? 'Dispatched to Inbox & Ready:' : 'Verification Passcode (Auto-Filled):'}
+                      </div>
+                      <div className="text-2xl font-black font-mono tracking-widest text-emerald-300">
+                        {generatedCode}
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-mono">
+                        Valid for 10 minutes • Click Verify to enter
+                      </div>
+                    </div>
+                  )}
+
                   <div>
                     <div className="flex justify-between items-center mb-1">
                       <label className="text-xs font-mono text-slate-400">Enter 6-Digit Code</label>
@@ -331,6 +386,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                         onClick={() => {
                           setCodeSent(false);
                           setOtpCode('');
+                          setGeneratedCode(null);
                           setSuccessMsg(null);
                         }}
                         className="text-[11px] text-emerald-400 hover:underline cursor-pointer"
@@ -340,7 +396,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     </div>
 
                     <div className="relative">
-                      <KeyRound size={14} className="absolute left-3.5 top-3 text-slate-500" />
+                      <KeyRound size={14} className="absolute left-3.5 top-3.5 text-slate-500" />
                       <input
                         type="text"
                         required
@@ -359,7 +415,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 disabled:opacity-50 text-slate-950 text-xs font-bold tracking-wide uppercase shadow-lg shadow-emerald-500/20 transition-all cursor-pointer flex items-center justify-center gap-2"
                   >
                     {loading ? (
-                      <span>Verifying Code...</span>
+                      <span className="flex items-center gap-2">
+                        <Loader2 size={14} className="animate-spin" />
+                        <span>Verifying Code...</span>
+                      </span>
                     ) : (
                       <>
                         <ShieldCheck size={16} />
@@ -439,7 +498,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 className="w-full mt-2 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 text-xs font-bold tracking-wide uppercase shadow-lg shadow-emerald-500/20 transition-all cursor-pointer flex items-center justify-center gap-2"
               >
                 {loading ? (
-                  <span>Authenticating...</span>
+                  <span className="flex items-center gap-2">
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Authenticating...</span>
+                  </span>
                 ) : authMode === 'register' ? (
                   <span>Create Account & Enter</span>
                 ) : (
@@ -460,14 +522,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         </div>
       </div>
 
-      {/* GOOGLE ACCOUNT CHOOSER POPUP (Matching Booking.com / Edge UI screenshot) */}
+      {/* GOOGLE ACCOUNT CHOOSER & AUTHENTICATION MODAL */}
       {isGoogleModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-150">
           <div className="w-full max-w-sm bg-[#121212] border border-slate-800 rounded-2xl shadow-2xl overflow-hidden font-sans text-slate-200 animate-in zoom-in-95 duration-200">
+            
             {/* Modal Top Header */}
             <div className="px-6 pt-5 pb-3 flex items-center justify-between border-b border-slate-800/60">
               <div className="flex items-center gap-2">
-                <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                   <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
                   <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
@@ -475,117 +538,180 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 </svg>
                 <span className="text-xs font-medium text-slate-300">Sign in with Google</span>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsGoogleModalOpen(false)}
-                className="text-slate-400 hover:text-slate-200 transition-colors p-1 rounded-lg hover:bg-slate-800"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* App branding */}
-            <div className="px-6 pt-5 pb-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 flex items-center justify-center text-slate-950 font-black mb-3">
-                <Building2 size={20} />
-              </div>
-              <h2 className="text-xl font-bold text-slate-100">Choose an account</h2>
-              <p className="text-xs text-slate-400 mt-0.5">to continue to <strong className="text-slate-200">Metro Hunt</strong></p>
-            </div>
-
-            {/* Account List */}
-            <div className="px-3 py-2 space-y-1">
-              
-              {/* Account 1: Davide Luca Sfia */}
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => handleSelectGoogleAccount('double.d10xd@gmail.com', 'Davide Luca Sfia')}
-                className="w-full p-3 rounded-xl hover:bg-slate-800/80 active:bg-slate-800 transition-colors flex items-center gap-3.5 text-left cursor-pointer group"
-              >
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-md">
-                  DLS
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold text-slate-100 group-hover:text-emerald-400 transition-colors truncate">
-                    Davide Luca Sfia
-                  </div>
-                  <div className="text-xs text-slate-400 truncate">
-                    double.d10xd@gmail.com
-                  </div>
-                </div>
-              </button>
-
-              {/* Account 2: Davide */}
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => handleSelectGoogleAccount('forlearningonytdavide@gmail.com', 'Davide')}
-                className="w-full p-3 rounded-xl hover:bg-slate-800/80 active:bg-slate-800 transition-colors flex items-center gap-3.5 text-left cursor-pointer group"
-              >
-                <div className="w-10 h-10 rounded-full bg-orange-600 flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-md">
-                  D
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold text-slate-100 group-hover:text-emerald-400 transition-colors truncate">
-                    Davide
-                  </div>
-                  <div className="text-xs text-slate-400 truncate">
-                    forlearningonytdavide@gmail.com
-                  </div>
-                </div>
-              </button>
-
-              {/* Option 3: Use another account */}
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => setShowCustomGoogleInput(!showCustomGoogleInput)}
-                className="w-full p-3 rounded-xl hover:bg-slate-800/80 active:bg-slate-800 transition-colors flex items-center gap-3.5 text-left cursor-pointer text-slate-300"
-              >
-                <div className="w-10 h-10 rounded-full border border-slate-700 flex items-center justify-center text-slate-400 shrink-0">
-                  <User size={18} />
-                </div>
-                <div className="text-xs font-medium">
-                  Use another account
-                </div>
-              </button>
-
-              {/* Expanded Custom Account Input */}
-              {showCustomGoogleInput && (
-                <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2.5 mt-2 animate-in fade-in">
-                  <input
-                    type="text"
-                    value={customGoogleName}
-                    onChange={(e) => setCustomGoogleName(e.target.value)}
-                    placeholder="Your Full Name"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
-                  />
-                  <input
-                    type="email"
-                    value={customGoogleEmail}
-                    onChange={(e) => setCustomGoogleEmail(e.target.value)}
-                    placeholder="your.google@gmail.com"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
-                  />
-                  <button
-                    type="button"
-                    disabled={!customGoogleEmail}
-                    onClick={() => handleSelectGoogleAccount(customGoogleEmail, customGoogleName || customGoogleEmail.split('@')[0])}
-                    className="w-full py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 text-xs font-bold rounded-lg transition-colors cursor-pointer"
-                  >
-                    Continue with this Account
-                  </button>
-                </div>
+              {!googleLoadingAccount && (
+                <button
+                  type="button"
+                  onClick={() => setIsGoogleModalOpen(false)}
+                  className="text-slate-400 hover:text-slate-200 transition-colors p-1 rounded-lg hover:bg-slate-800 cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
               )}
             </div>
 
-            {/* Modal Footer */}
-            <div className="p-5 border-t border-slate-800/80 text-[11px] text-slate-400 leading-relaxed">
-              Before using this app, you can review Metro Hunt's{' '}
-              <span className="text-blue-400 hover:underline cursor-pointer">Privacy Policy</span> and{' '}
-              <span className="text-blue-400 hover:underline cursor-pointer">Terms of Service</span>.
-            </div>
+            {/* DEDICATED GOOGLE AUTHENTICATION LOADING STATE */}
+            {googleLoadingAccount ? (
+              <div className="p-8 text-center space-y-5 animate-in fade-in">
+                {/* Google Animated Loading Spinner */}
+                <div className="relative w-16 h-16 mx-auto flex items-center justify-center">
+                  <div className="absolute inset-0 rounded-full border-4 border-slate-800"></div>
+                  <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-500 border-r-emerald-500 border-b-yellow-500 border-l-rose-500 animate-spin"></div>
+                  <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center">
+                    <Sparkles size={16} className="text-emerald-400 animate-pulse" />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-base font-bold text-slate-100">
+                    Signing in with Google
+                  </div>
+                  <div className="text-xs text-emerald-400 font-mono font-medium">
+                    {googleLoadingAccount.name}
+                  </div>
+                  <div className="text-[11px] text-slate-400 font-mono">
+                    {googleLoadingAccount.email}
+                  </div>
+                </div>
+
+                <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 text-[11px] text-slate-400 font-mono flex items-center justify-center gap-2">
+                  <Loader2 size={13} className="animate-spin text-cyan-400" />
+                  <span>Connecting portfolio to Metro Hunt...</span>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* App Branding Header */}
+                <div className="px-6 pt-5 pb-3">
+                  <img 
+                    src="/metrohunt-icon.jpg" 
+                    alt="Metro Hunt Logo" 
+                    className="w-10 h-10 rounded-xl object-cover border border-cyan-500/30 mb-3 shadow-md" 
+                  />
+                  <h2 className="text-xl font-bold text-slate-100">Choose an account</h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    to continue to <strong className="text-slate-200">Metro Hunt</strong>
+                  </p>
+                </div>
+
+                {/* Modal Error */}
+                {googleModalError && (
+                  <div className="mx-4 mb-2 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-mono flex items-start gap-2">
+                    <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                    <span>{googleModalError}</span>
+                  </div>
+                )}
+
+                {/* Account List */}
+                <div className="px-3 py-2 space-y-1 max-h-[50vh] overflow-y-auto">
+                  
+                  {/* Account 1: Davide Luca Sfia */}
+                  <button
+                    type="button"
+                    onClick={() => handleSelectGoogleAccount('double.d10xd@gmail.com', 'Davide Luca Sfia')}
+                    className="w-full p-3 rounded-xl hover:bg-slate-800/80 active:bg-slate-800 transition-colors flex items-center gap-3.5 text-left cursor-pointer group"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-md">
+                      DLS
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold text-slate-100 group-hover:text-emerald-400 transition-colors truncate">
+                        Davide Luca Sfia
+                      </div>
+                      <div className="text-xs text-slate-400 truncate">
+                        double.d10xd@gmail.com
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Account 2: Davide */}
+                  <button
+                    type="button"
+                    onClick={() => handleSelectGoogleAccount('forlearningonytdavide@gmail.com', 'Davide')}
+                    className="w-full p-3 rounded-xl hover:bg-slate-800/80 active:bg-slate-800 transition-colors flex items-center gap-3.5 text-left cursor-pointer group"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-orange-600 flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-md">
+                      D
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold text-slate-100 group-hover:text-emerald-400 transition-colors truncate">
+                        Davide
+                      </div>
+                      <div className="text-xs text-slate-400 truncate">
+                        forlearningonytdavide@gmail.com
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Account 3: Ticul */}
+                  <button
+                    type="button"
+                    onClick={() => handleSelectGoogleAccount('davide.lucasfia@gmail.com', 'Ticul')}
+                    className="w-full p-3 rounded-xl hover:bg-slate-800/80 active:bg-slate-800 transition-colors flex items-center gap-3.5 text-left cursor-pointer group"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-md">
+                      T
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold text-slate-100 group-hover:text-emerald-400 transition-colors truncate">
+                        Ticul
+                      </div>
+                      <div className="text-xs text-slate-400 truncate">
+                        davide.lucasfia@gmail.com
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Option 4: Use another account */}
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomGoogleInput(!showCustomGoogleInput)}
+                    className="w-full p-3 rounded-xl hover:bg-slate-800/80 active:bg-slate-800 transition-colors flex items-center gap-3.5 text-left cursor-pointer text-slate-300"
+                  >
+                    <div className="w-10 h-10 rounded-full border border-slate-700 flex items-center justify-center text-slate-400 shrink-0">
+                      <User size={18} />
+                    </div>
+                    <div className="text-xs font-medium">
+                      Use another account
+                    </div>
+                  </button>
+
+                  {/* Expanded Custom Account Input */}
+                  {showCustomGoogleInput && (
+                    <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2.5 mt-2 animate-in fade-in">
+                      <input
+                        type="text"
+                        value={customGoogleName}
+                        onChange={(e) => setCustomGoogleName(e.target.value)}
+                        placeholder="Your Full Name (e.g. Davide)"
+                        className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                      />
+                      <input
+                        type="email"
+                        value={customGoogleEmail}
+                        onChange={(e) => setCustomGoogleEmail(e.target.value)}
+                        placeholder="your.google@gmail.com"
+                        className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        disabled={!customGoogleEmail || !customGoogleEmail.includes('@')}
+                        onClick={() => handleSelectGoogleAccount(customGoogleEmail.trim(), customGoogleName.trim() || customGoogleEmail.split('@')[0])}
+                        className="w-full py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                      >
+                        Continue with this Account
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Modal Footer */}
+                <div className="p-5 border-t border-slate-800/80 text-[11px] text-slate-400 leading-relaxed">
+                  Before using this app, you can review Metro Hunt's{' '}
+                  <span className="text-blue-400 hover:underline cursor-pointer">Privacy Policy</span> and{' '}
+                  <span className="text-blue-400 hover:underline cursor-pointer">Terms of Service</span>.
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

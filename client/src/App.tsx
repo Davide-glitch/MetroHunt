@@ -66,7 +66,8 @@ export function App() {
     setReady, 
     setTargetGoal, 
     startMatch, 
-    returnToLobby 
+    returnToLobby,
+    surrenderMatch
   } = useGameHub({
     token,
     currentUser: user,
@@ -120,6 +121,21 @@ export function App() {
       showToast('Game state has been reset.');
       fetchUserData();
       fetchMarketProperties();
+      fetchAuditLogs();
+    },
+    onPlayerSurrendered: (data) => {
+      showToast(`🏳 ${data.playerName} surrendered! ${data.remainingPlayers} investor(s) remain in the match.`);
+    },
+    onMatchAutoVictory: (data) => {
+      showToast(`🏆 ${data.winnerName} wins — ${data.reason}`);
+      setVictoryData({
+        winnerId: data.winnerId,
+        winnerName: data.winnerName,
+        finalNetWorth: netWorth,
+        target: targetNetWorth,
+        totalTurns: turnsSurvived
+      });
+      fetchUserData();
       fetchAuditLogs();
     }
   });
@@ -306,6 +322,10 @@ export function App() {
 
   const handleAbandonMatch = async () => {
     try {
+      // Surrender via SignalR (only removes THIS player from the match, others continue)
+      surrenderMatch();
+
+      // Also call the API to reset this player's state
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -315,16 +335,18 @@ export function App() {
       });
 
       if (res.ok) {
-        showToast('🏳 Match forfeited. Portfolio liquidated and balance reset.');
+        showToast('🏳 Match forfeited. You surrendered — other players continue!');
         await fetchUserData();
         await fetchMarketProperties();
         await fetchAuditLogs();
         setCurrentView('lobby');
       } else {
         showToast('Could not abandon match.');
+        setCurrentView('lobby');
       }
     } catch (err) {
       console.warn('Abandon match error:', err);
+      setCurrentView('lobby');
     }
   };
 

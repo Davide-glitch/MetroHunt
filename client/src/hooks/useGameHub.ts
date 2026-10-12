@@ -36,6 +36,7 @@ export interface LobbyState {
   matchActive: boolean;
   canStart: boolean;
   hostConnectionId?: string;
+  matchPlayerCount?: number;
 }
 
 export interface RoomSummary {
@@ -63,6 +64,8 @@ interface UseGameHubProps {
   onRoomsListUpdated?: (rooms: RoomSummary[]) => void;
   onMatchStarted?: (data: { roomId?: string; targetGoal: number; playerCount: number; players: LobbyPlayer[] }) => void;
   onReturnedToLobby?: () => void;
+  onPlayerSurrendered?: (data: { playerName: string; remainingPlayers: number }) => void;
+  onMatchAutoVictory?: (data: { winnerName: string; winnerId: string; reason: string }) => void;
 }
 
 export const useGameHub = ({
@@ -80,7 +83,9 @@ export const useGameHub = ({
   onLobbyStateUpdated,
   onRoomsListUpdated,
   onMatchStarted,
-  onReturnedToLobby
+  onReturnedToLobby,
+  onPlayerSurrendered,
+  onMatchAutoVictory
 }: UseGameHubProps) => {
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [leaderboard, setLeaderboard] = useState<PlayerScore[]>([]);
@@ -162,6 +167,18 @@ export const useGameHub = ({
       if (onReturnedToLobby) onReturnedToLobby();
     });
 
+    // New: Player surrender notification
+    connection.on('PlayerSurrendered', (data: { playerName: string; remainingPlayers: number }) => {
+      console.log(`🏳 ${data.playerName} surrendered. ${data.remainingPlayers} players remain.`);
+      if (onPlayerSurrendered) onPlayerSurrendered(data);
+    });
+
+    // New: Auto-victory when last player standing
+    connection.on('MatchAutoVictory', (data: { winnerName: string; winnerId: string; reason: string }) => {
+      console.log(`🏆 AUTO-VICTORY: ${data.winnerName} — ${data.reason}`);
+      if (onMatchAutoVictory) onMatchAutoVictory(data);
+    });
+
     connection.start()
       .then(() => {
         setIsConnected(true);
@@ -230,6 +247,12 @@ export const useGameHub = ({
     }
   }, [isConnected]);
 
+  const surrenderMatch = useCallback(() => {
+    if (connectionRef.current && isConnected) {
+      connectionRef.current.invoke('SurrenderMatch').catch(console.error);
+    }
+  }, [isConnected]);
+
   return {
     isConnected,
     leaderboard,
@@ -243,6 +266,7 @@ export const useGameHub = ({
     setTargetGoal,
     startMatch,
     returnToLobby,
+    surrenderMatch,
     connection: connectionRef.current
   };
 };

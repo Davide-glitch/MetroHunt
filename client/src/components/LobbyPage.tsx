@@ -61,7 +61,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
   const [selectedSoloGoal, setSelectedSoloGoal] = useState<number>(10_000_000);
   const [activeTab, setActiveTab] = useState<'multiplayer' | 'solo'>('multiplayer');
   const [isBrowseModalOpen, setIsBrowseModalOpen] = useState(false);
-  const [newRoomName, setNewRoomName] = useState('');
+  const [newRoomName, setNewRoomName] = useState(`${currentUser.userName}'s Tycoon Arena`);
   const [newRoomGoal, setNewRoomGoal] = useState<number>(10_000_000);
   const [showCreateForm, setShowCreateForm] = useState(false);
 
@@ -95,8 +95,9 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
   const handleCreateRoomSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (onCreateRoom) {
-      onCreateRoom(newRoomName || `${currentUser.userName}'s Suite`, newRoomGoal);
-      setNewRoomName('');
+      const roomToCreate = newRoomName.trim() || `${currentUser.userName}'s Tycoon Arena`;
+      onCreateRoom(roomToCreate, newRoomGoal);
+      setNewRoomName(`${currentUser.userName}'s Tycoon Arena`);
       setShowCreateForm(false);
       setIsBrowseModalOpen(false);
     }
@@ -108,10 +109,11 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
       <header className="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {/* Visual Icon replacing plain MH text */}
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-emerald-400 via-teal-400 to-cyan-500 flex items-center justify-center text-slate-950 shadow-lg shadow-emerald-500/25">
-              <Building2 size={22} className="stroke-[2.5]" />
-            </div>
+            <img 
+              src="/metrohunt-icon.jpg" 
+              alt="Metro Hunt Logo" 
+              className="h-10 w-10 rounded-xl object-cover shadow-lg shadow-cyan-500/25 border border-cyan-500/30 shrink-0" 
+            />
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-extrabold tracking-wider text-base bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">
@@ -122,7 +124,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 font-mono">
-                Multi-Room Syndicate Lobby • DBD Ready System
+                Lobby
               </p>
             </div>
           </div>
@@ -244,6 +246,9 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  if (!newRoomName || !newRoomName.trim()) {
+                    setNewRoomName(`${currentUser.userName}'s Tycoon Arena`);
+                  }
                   setShowCreateForm(true);
                   setIsBrowseModalOpen(true);
                 }}
@@ -628,7 +633,12 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                     </span>
                     <button
                       type="button"
-                      onClick={() => setShowCreateForm(true)}
+                      onClick={() => {
+                        if (!newRoomName || !newRoomName.trim()) {
+                          setNewRoomName(`${currentUser.userName}'s Tycoon Arena`);
+                        }
+                        setShowCreateForm(true);
+                      }}
                       className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer"
                     >
                       <Plus size={14} />

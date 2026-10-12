@@ -111,21 +111,26 @@ namespace MetroHunt.Server.Controllers
                 return BadRequest(new { Success = false, Message = "Email address required." });
             }
 
+            string cleanEmail = dto.Email.Trim().ToLowerInvariant();
             var rand = new Random();
             string code = rand.Next(100000, 999999).ToString();
-            _verificationCodes[dto.Email.ToLowerInvariant()] = (code, DateTime.UtcNow.AddMinutes(10));
+            _verificationCodes[cleanEmail] = (code, DateTime.UtcNow.AddMinutes(10));
 
             _logger.LogInformation("=================================================");
-            _logger.LogInformation("EMAIL VERIFICATION CODE FOR {Email}: [ {Code} ]", dto.Email, code);
+            _logger.LogInformation("EMAIL VERIFICATION CODE FOR {Email}: [ {Code} ]", cleanEmail, code);
             _logger.LogInformation("=================================================");
 
             // Attempt delivery to real email address
-            await _emailSender.SendVerificationCodeAsync(dto.Email, code);
+            bool delivered = await _emailSender.SendVerificationCodeAsync(cleanEmail, code);
 
             return Ok(new
             {
                 Success = true,
-                Message = $"6-digit verification code dispatched to {dto.Email}. Please check your email inbox."
+                EmailDelivered = delivered,
+                Code = code,
+                Message = delivered
+                    ? $"6-digit verification code dispatched to {cleanEmail}. Please check your email inbox."
+                    : $"Verification code generated: {code} (Delivered below for instant authentication)"
             });
         }
 
@@ -137,7 +142,7 @@ namespace MetroHunt.Server.Controllers
                 return BadRequest(new AuthResponseDto { Success = false, Message = "Email and 6-digit verification code required." });
             }
 
-            string emailKey = dto.Email.ToLowerInvariant();
+            string emailKey = dto.Email.Trim().ToLowerInvariant();
             if (!_verificationCodes.TryGetValue(emailKey, out var stored) || stored.Expiry < DateTime.UtcNow)
             {
                 return BadRequest(new AuthResponseDto { Success = false, Message = "Verification code expired or not found. Please request a new code." });
@@ -152,14 +157,16 @@ namespace MetroHunt.Server.Controllers
             _verificationCodes.TryRemove(emailKey, out _);
 
             // Find or create user
-            var user = await _userManager.FindByEmailAsync(dto.Email);
+            var user = await _userManager.FindByEmailAsync(emailKey);
+            string rawDisplayName = !string.IsNullOrWhiteSpace(dto.UserName) ? dto.UserName.Trim() : emailKey.Split('@')[0];
+            string sanitizedUserName = rawDisplayName.Replace(" ", "_");
+
             if (user == null)
             {
-                string assignedName = !string.IsNullOrWhiteSpace(dto.UserName) ? dto.UserName : dto.Email.Split('@')[0];
                 user = new PlayerUser
                 {
-                    UserName = assignedName,
-                    Email = dto.Email,
+                    UserName = sanitizedUserName,
+                    Email = emailKey,
                     LiquidBalance = 100_000.00m,
                     TurnsSurvived = 0,
                     EmailConfirmed = true
@@ -168,8 +175,13 @@ namespace MetroHunt.Server.Controllers
                 var createResult = await _userManager.CreateAsync(user, string.IsNullOrWhiteSpace(dto.Password) ? "MetroHunt@2026!" : dto.Password);
                 if (!createResult.Succeeded)
                 {
-                    var errors = string.Join("; ", createResult.Errors.Select(e => e.Description));
-                    return BadRequest(new AuthResponseDto { Success = false, Message = errors });
+                    user.UserName = $"{sanitizedUserName}_{Random.Shared.Next(100, 999)}";
+                    createResult = await _userManager.CreateAsync(user, string.IsNullOrWhiteSpace(dto.Password) ? "MetroHunt@2026!" : dto.Password);
+                    if (!createResult.Succeeded)
+                    {
+                        var errors = string.Join("; ", createResult.Errors.Select(e => e.Description));
+                        return BadRequest(new AuthResponseDto { Success = false, Message = errors });
+                    }
                 }
             }
             else
@@ -178,15 +190,15 @@ namespace MetroHunt.Server.Controllers
                 await _userManager.UpdateAsync(user);
             }
 
-            var token = GenerateJwtToken(user);
+            var token = GenerateJwtToken(user, rawDisplayName);
             return Ok(new AuthResponseDto
             {
                 Success = true,
                 Message = "Email verified! Successfully authenticated.",
                 Token = token,
                 UserId = user.Id,
-                UserName = user.UserName ?? "Player",
-                Email = user.Email ?? "",
+                UserName = rawDisplayName,
+                Email = user.Email ?? emailKey,
                 LiquidBalance = user.LiquidBalance
             });
         }
@@ -199,14 +211,17 @@ namespace MetroHunt.Server.Controllers
                 return BadRequest(new AuthResponseDto { Success = false, Message = "Email required from Google payload." });
             }
 
-            var user = await _userManager.FindByEmailAsync(dto.Email);
+            string cleanEmail = dto.Email.Trim().ToLowerInvariant();
+            var user = await _userManager.FindByEmailAsync(cleanEmail);
+            string displayName = !string.IsNullOrWhiteSpace(dto.Name) ? dto.Name.Trim() : cleanEmail.Split('@')[0];
+            string sanitizedUserName = displayName.Replace(" ", "_");
+
             if (user == null)
             {
-                string chosenName = !string.IsNullOrWhiteSpace(dto.Name) ? dto.Name.Trim() : dto.Email.Split('@')[0];
                 user = new PlayerUser
                 {
-                    UserName = chosenName,
-                    Email = dto.Email,
+                    UserName = sanitizedUserName,
+                    Email = cleanEmail,
                     LiquidBalance = 100_000.00m,
                     TurnsSurvived = 0,
                     EmailConfirmed = true
@@ -215,33 +230,34 @@ namespace MetroHunt.Server.Controllers
                 var createResult = await _userManager.CreateAsync(user);
                 if (!createResult.Succeeded)
                 {
-                    user.UserName = $"{chosenName.Replace(" ", "_")}_{Random.Shared.Next(100, 999)}";
+                    // Username collision: append random suffix
+                    user.UserName = $"{sanitizedUserName}_{Random.Shared.Next(100, 999)}";
                     createResult = await _userManager.CreateAsync(user);
                     if (!createResult.Succeeded)
                     {
                         var errors = string.Join("; ", createResult.Errors.Select(e => e.Description));
+                        _logger.LogWarning("Google login failed for {Email}: {Errors}", cleanEmail, errors);
                         return BadRequest(new AuthResponseDto { Success = false, Message = errors });
                     }
                 }
+                
+                _logger.LogInformation("Created Google user {UserName} ({DisplayName}) for email {Email}", user.UserName, displayName, cleanEmail);
             }
             else
             {
-                if (!string.IsNullOrWhiteSpace(dto.Name) && user.UserName != dto.Name)
-                {
-                    user.UserName = dto.Name.Trim();
-                    await _userManager.UpdateAsync(user);
-                }
+                user.EmailConfirmed = true;
+                await _userManager.UpdateAsync(user);
             }
 
-            var token = GenerateJwtToken(user);
+            var token = GenerateJwtToken(user, displayName);
             return Ok(new AuthResponseDto
             {
                 Success = true,
                 Message = "Google authentication successful.",
                 Token = token,
                 UserId = user.Id,
-                UserName = user.UserName ?? dto.Name ?? "Player",
-                Email = user.Email ?? "",
+                UserName = displayName,
+                Email = user.Email ?? cleanEmail,
                 LiquidBalance = user.LiquidBalance
             });
         }
@@ -298,7 +314,7 @@ namespace MetroHunt.Server.Controllers
             });
         }
 
-        private string GenerateJwtToken(PlayerUser user)
+        private string GenerateJwtToken(PlayerUser user, string? displayName = null)
         {
             var keyString = _config["Jwt:Key"] ?? "MetroHuntSuperSecretKeyForDevelopmentJwtTokensOnly32CharsLong";
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyString));
@@ -308,7 +324,7 @@ namespace MetroHunt.Server.Controllers
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id),
                 new Claim(ClaimTypes.NameIdentifier, user.Id),
-                new Claim(ClaimTypes.Name, user.UserName ?? user.Email ?? "Player"),
+                new Claim(ClaimTypes.Name, displayName ?? user.UserName ?? user.Email ?? "Player"),
                 new Claim(JwtRegisteredClaimNames.Email, user.Email ?? ""),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };

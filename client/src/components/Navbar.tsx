@@ -1,4 +1,4 @@
-import { Building2, User, Landmark, RotateCcw, Play, Radio, LogOut, Briefcase, Users, Flag, UserCheck, Globe } from 'lucide-react';
+import { User, Landmark, RotateCcw, Play, Radio, LogOut, Briefcase, Users, Flag, UserCheck, Globe } from 'lucide-react';
 
 interface NavbarProps {
   userName?: string;
@@ -36,9 +36,11 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Brand */}
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-emerald-500/20">
-            <Building2 size={20} />
-          </div>
+          <img 
+            src="/metrohunt-icon.jpg" 
+            alt="Metro Hunt Logo" 
+            className="w-10 h-10 rounded-xl object-cover shadow-lg shadow-cyan-500/25 border border-cyan-500/30 shrink-0" 
+          />
           <div>
             <span className="font-extrabold text-base tracking-tight text-slate-100">
               METRO HUNT

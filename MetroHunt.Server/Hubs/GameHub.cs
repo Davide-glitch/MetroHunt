@@ -19,6 +19,8 @@ namespace MetroHunt.Server.Hubs
         public decimal TargetGoal { get; set; } = 10_000_000m;
         public bool MatchActive { get; set; } = false;
         public ConcurrentDictionary<string, LobbyPlayer> Players { get; set; } = new();
+        // Track players who were in the match when it started
+        public ConcurrentDictionary<string, LobbyPlayer> MatchPlayers { get; set; } = new();
     }
 
     public class RoomSummaryDto
@@ -78,6 +80,10 @@ namespace MetroHunt.Server.Hubs
                 if (_rooms.TryGetValue(oldRoomId, out var oldRoom))
                 {
                     oldRoom.Players.TryRemove(Context.ConnectionId, out _);
+                    oldRoom.MatchPlayers.TryRemove(Context.ConnectionId, out _);
+
+                    // If this was an active match and only 1 player remains, they win
+                    await CheckForAutoVictory(oldRoom);
                     await BroadcastRoomState(oldRoom);
                 }
             }
@@ -90,11 +96,18 @@ namespace MetroHunt.Server.Hubs
                 TargetGoal = 10_000_000m
             });
 
-            // 3. Add to SignalR group
+            // 3. Don't allow joining a room that has an active match (unless you're already in it)
+            if (room.MatchActive && !room.MatchPlayers.ContainsKey(Context.ConnectionId))
+            {
+                // Send them to the lobby state of this room but don't add them to the match
+                // They'll see the room is in a match and can wait or go elsewhere
+            }
+
+            // 4. Add to SignalR group
             await Groups.AddToGroupAsync(Context.ConnectionId, $"room_{sanitizedRoomId}");
             _connectionRooms[Context.ConnectionId] = sanitizedRoomId;
 
-            // 4. Register player
+            // 5. Register player
             bool isFirst = room.Players.IsEmpty || !room.Players.Values.Any(p => p.IsHost);
             var lobbyPlayer = new LobbyPlayer
             {
@@ -173,8 +186,19 @@ namespace MetroHunt.Server.Hubs
                 if (allReady)
                 {
                     room.MatchActive = true;
-                    _logger.LogInformation("Host {PlayerName} started match in room {RoomId}! Players: {Count}", player.PlayerName, roomId, playerList.Count);
 
+                    // Snapshot who is in the match (only real players who readied up)
+                    room.MatchPlayers.Clear();
+                    foreach (var p in playerList)
+                    {
+                        room.MatchPlayers[p.ConnectionId] = p;
+                    }
+
+                    _logger.LogInformation(
+                        "Host {PlayerName} started match in room {RoomId}! Players: {Count}",
+                        player.PlayerName, roomId, playerList.Count);
+
+                    // Only send MatchStarted to the ACTUAL match players (no ghosts)
                     await Clients.Group($"room_{roomId}").SendAsync("MatchStarted", new
                     {
                         roomId = room.RoomId,
@@ -188,20 +212,119 @@ namespace MetroHunt.Server.Hubs
             }
         }
 
+        /// <summary>
+        /// Called when a player voluntarily surrenders/abandons the active match.
+        /// Removes them from the match but doesn't force others back to lobby.
+        /// If only 1 player remains, that player wins automatically.
+        /// </summary>
+        public async Task SurrenderMatch()
+        {
+            if (_connectionRooms.TryGetValue(Context.ConnectionId, out var roomId) &&
+                _rooms.TryGetValue(roomId, out var room))
+            {
+                if (room.MatchActive)
+                {
+                    string surrenderName = "Unknown";
+                    if (room.MatchPlayers.TryRemove(Context.ConnectionId, out var surrendered))
+                    {
+                        surrenderName = surrendered.PlayerName;
+                    }
+
+                    // Notify remaining match players about the surrender
+                    await Clients.Group($"room_{roomId}").SendAsync("PlayerSurrendered", new
+                    {
+                        playerName = surrenderName,
+                        remainingPlayers = room.MatchPlayers.Count
+                    });
+
+                    _logger.LogInformation(
+                        "Player {PlayerName} surrendered match in room {RoomId}. Remaining: {Count}",
+                        surrenderName, roomId, room.MatchPlayers.Count);
+
+                    // Check if only 1 player remains → auto-win
+                    await CheckForAutoVictory(room);
+                }
+
+                // Reset the surrendering player's ready state
+                if (room.Players.TryGetValue(Context.ConnectionId, out var lobbyPlayer))
+                {
+                    lobbyPlayer.IsReady = false;
+                }
+
+                // Only the surrendering player returns to lobby view
+                await Clients.Caller.SendAsync("ReturnedToLobby");
+                await BroadcastRoomState(room);
+                await BroadcastRoomsList();
+            }
+        }
+
+        /// <summary>
+        /// Host-only: ends the entire match and returns ALL players to lobby.
+        /// </summary>
         public async Task ReturnToLobby()
         {
             if (_connectionRooms.TryGetValue(Context.ConnectionId, out var roomId) &&
                 _rooms.TryGetValue(roomId, out var room))
             {
+                // Only reset match if caller is host or match is not active
+                bool isHost = room.Players.TryGetValue(Context.ConnectionId, out var caller) && caller.IsHost;
+
+                if (isHost || !room.MatchActive)
+                {
+                    room.MatchActive = false;
+                    room.MatchPlayers.Clear();
+                    foreach (var p in room.Players.Values)
+                    {
+                        p.IsReady = false;
+                    }
+
+                    await Clients.Group($"room_{roomId}").SendAsync("ReturnedToLobby");
+                    await BroadcastRoomState(room);
+                    await BroadcastRoomsList();
+                }
+                else
+                {
+                    // Non-host players calling ReturnToLobby just surrender
+                    await SurrenderMatch();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Checks if an active match has only 1 player left. If so, declare them the winner.
+        /// </summary>
+        private async Task CheckForAutoVictory(LobbyRoom room)
+        {
+            if (!room.MatchActive) return;
+
+            var remaining = room.MatchPlayers.Values.ToList();
+
+            if (remaining.Count == 1)
+            {
+                var winner = remaining[0];
+                _logger.LogInformation(
+                    "Auto-victory! {PlayerName} is the last investor standing in room {RoomId}",
+                    winner.PlayerName, room.RoomId);
+
+                await Clients.Group($"room_{room.RoomId}").SendAsync("MatchAutoVictory", new
+                {
+                    winnerName = winner.PlayerName,
+                    winnerId = winner.PlayerId,
+                    reason = "Last investor standing — all opponents surrendered!"
+                });
+
                 room.MatchActive = false;
+                room.MatchPlayers.Clear();
                 foreach (var p in room.Players.Values)
                 {
                     p.IsReady = false;
                 }
-
-                await Clients.Group($"room_{roomId}").SendAsync("ReturnedToLobby");
-                await BroadcastRoomState(room);
-                await BroadcastRoomsList();
+            }
+            else if (remaining.Count == 0)
+            {
+                // Everyone left, just reset the room
+                room.MatchActive = false;
+                room.MatchPlayers.Clear();
             }
         }
 
@@ -247,7 +370,8 @@ namespace MetroHunt.Server.Hubs
                 targetGoal = room.TargetGoal,
                 matchActive = room.MatchActive,
                 canStart = allReady,
-                hostConnectionId = playerList.FirstOrDefault(p => p.IsHost)?.ConnectionId
+                hostConnectionId = playerList.FirstOrDefault(p => p.IsHost)?.ConnectionId,
+                matchPlayerCount = room.MatchPlayers.Count
             };
         }
 
@@ -297,11 +421,28 @@ namespace MetroHunt.Server.Hubs
             {
                 if (room.Players.TryRemove(Context.ConnectionId, out var removed))
                 {
+                    // Also remove from active match if applicable
+                    room.MatchPlayers.TryRemove(Context.ConnectionId, out _);
+
+                    // Notify remaining players about the disconnect
+                    if (room.MatchActive)
+                    {
+                        await Clients.Group($"room_{roomId}").SendAsync("PlayerSurrendered", new
+                        {
+                            playerName = removed.PlayerName,
+                            remainingPlayers = room.MatchPlayers.Count
+                        });
+                    }
+
+                    // If disconnecting player was host, promote the next player
                     if (removed.IsHost && room.Players.Count > 0)
                     {
                         var newHost = room.Players.Values.FirstOrDefault();
                         if (newHost != null) newHost.IsHost = true;
                     }
+
+                    // Check for auto-victory (last player standing wins)
+                    await CheckForAutoVictory(room);
 
                     await BroadcastRoomState(room);
                     await BroadcastRoomsList();
