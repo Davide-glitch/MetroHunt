@@ -3,13 +3,19 @@ import { History, ShieldAlert, Wrench, DollarSign, Award, ArrowUpRight } from 'l
 
 export interface AuditLogItem {
   id: number;
-  userId: string;
-  userName: string;
   actionType: string;
-  title: string;
-  details: string;
-  financialImpact: number;
+  description?: string;
+  amount?: number;
+  postBalance?: number;
+  turnNumber?: number;
   timestamp: string;
+  propertyTitle?: string;
+  // legacy/fallback fields
+  userId?: string;
+  userName?: string;
+  title?: string;
+  details?: string;
+  financialImpact?: number;
 }
 
 interface AuditLedgerProps {
@@ -35,10 +41,32 @@ export const AuditLedger: React.FC<AuditLedgerProps> = ({ logs, onRefresh }) => 
           </span>
         );
       case 'PropertyAcquisition':
+      case 'Acquisition':
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
             <DollarSign size={10} />
             Acquisition
+          </span>
+        );
+      case 'RentalIncome':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+            <DollarSign size={10} />
+            Rental Income
+          </span>
+        );
+      case 'MaintenanceFee':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/20">
+            <Wrench size={10} />
+            Maintenance
+          </span>
+        );
+      case 'WorkIncome':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+            <DollarSign size={10} />
+            Brokerage Deal
           </span>
         );
       case 'TurnSettlement':
@@ -107,8 +135,14 @@ export const AuditLedger: React.FC<AuditLedgerProps> = ({ logs, onRefresh }) => 
             </thead>
             <tbody className="divide-y divide-slate-800/60">
               {logs.map((log) => {
-                const isPositive = log.financialImpact > 0;
-                const isZero = log.financialImpact === 0;
+                const rawAmount = log.amount !== undefined ? log.amount : log.financialImpact;
+                const parsed = typeof rawAmount === 'number' ? rawAmount : parseFloat(String(rawAmount || '0'));
+                const impact = !isNaN(parsed) ? parsed : 0;
+                const isPositive = impact > 0;
+                const isZero = Math.abs(impact) < 0.001;
+
+                const displayTitle = log.propertyTitle || log.title || log.actionType;
+                const displayDetails = log.description || log.details || '';
 
                 return (
                   <tr key={log.id} className="hover:bg-slate-800/30 transition-colors">
@@ -121,14 +155,14 @@ export const AuditLedger: React.FC<AuditLedgerProps> = ({ logs, onRefresh }) => 
                     <td className="py-2.5 text-slate-200 font-medium">
                       {log.userName || 'System'}
                     </td>
-                    <td className="py-2.5 text-slate-300 max-w-md truncate" title={log.details}>
-                      <span className="font-semibold text-slate-100 mr-1">{log.title}:</span>
-                      {log.details}
+                    <td className="py-2.5 text-slate-300 max-w-md truncate" title={displayDetails}>
+                      <span className="font-semibold text-slate-100 mr-1">{displayTitle}:</span>
+                      {displayDetails}
                     </td>
                     <td className={`py-2.5 text-right font-semibold whitespace-nowrap ${
                       isZero ? 'text-slate-400' : isPositive ? 'text-emerald-400' : 'text-rose-400'
                     }`}>
-                      {isZero ? '$0' : `${isPositive ? '+' : '-'}$${Math.abs(log.financialImpact).toLocaleString()}`}
+                      {isZero ? '$0' : `${isPositive ? '+' : '-'}$${Math.abs(impact).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`}
                     </td>
                   </tr>
                 );

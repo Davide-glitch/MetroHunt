@@ -22,6 +22,7 @@ import { Sparkles } from 'lucide-react';
 export function App() {
   // Navigation: 3-page flow ('login' handled by !user, 'lobby' is room/matchmaking, 'game' is board)
   const [currentView, setCurrentView] = useState<'lobby' | 'game'>('lobby');
+  const [gameMode, setGameMode] = useState<'solo' | 'multiplayer'>('solo');
 
   // State
   const [user, setUser] = useState<{ id: string; userName: string; email: string; liquidBalance: number } | null>(null);
@@ -70,6 +71,7 @@ export function App() {
       fetchAuditLogs();
     },
     onMatchStarted: (data) => {
+      setGameMode('multiplayer');
       setCurrentView('game');
       setTargetNetWorth(data.targetGoal);
       showToast(`🚀 Multiplayer Match Started! Target: $${(data.targetGoal / 1_000_000).toLocaleString()}M`);
@@ -287,6 +289,38 @@ export function App() {
     setUser(null);
     setCurrentView('lobby');
     showToast('Signed out of investor session.');
+  };
+
+  const handleVerifiedLogin = (tokenVal: string, userObj: { id: string; userName: string; email: string; liquidBalance: number }) => {
+    localStorage.setItem('metrohunt_token', tokenVal);
+    setToken(tokenVal);
+    setUser(userObj);
+    joinLobby(userObj.id, userObj.userName);
+    showToast(`Welcome, ${userObj.userName}! Email verified successfully.`);
+  };
+
+  const handleAbandonMatch = async () => {
+    try {
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/game/abandon', {
+        method: 'POST',
+        headers
+      });
+
+      if (res.ok) {
+        showToast('🏳 Match forfeited. Portfolio liquidated and balance reset.');
+        await fetchUserData();
+        await fetchMarketProperties();
+        await fetchAuditLogs();
+        setCurrentView('lobby');
+      } else {
+        showToast('Could not abandon match.');
+      }
+    } catch (err) {
+      console.warn('Abandon match error:', err);
+    }
   };
 
   // Complete Brokerage Deal Execution
@@ -512,6 +546,7 @@ export function App() {
         onLogin={handleLogin}
         onRegister={handleRegister}
         onGoogleLogin={handleGoogleLogin}
+        onVerifiedLogin={handleVerifiedLogin}
       />
     );
   }
@@ -528,8 +563,12 @@ export function App() {
           setTargetGoal(target);
           handleSetTarget(target);
         }}
-        onStartMatch={() => startMatch()}
+        onStartMatch={() => {
+          setGameMode('multiplayer');
+          startMatch();
+        }}
         onStartSolo={(target) => {
+          setGameMode('solo');
           setTargetNetWorth(target);
           handleSetTarget(target);
           setCurrentView('game');
@@ -545,6 +584,7 @@ export function App() {
       {/* Navigation */}
       <Navbar
         userName={user?.userName}
+        gameMode={gameMode}
         isSignalRConnected={isConnected}
         onOpenAuth={() => setIsAuthOpen(true)}
         onOpenLoan={() => setIsLoanOpen(true)}
@@ -558,6 +598,7 @@ export function App() {
           returnToLobby();
           setCurrentView('lobby');
         }}
+        onAbandonMatch={handleAbandonMatch}
       />
 
       {/* Main Content Layout */}
@@ -576,6 +617,9 @@ export function App() {
           targetNetWorth={targetNetWorth}
           players={leaderboard}
           currentPlayerId={user?.id}
+          gameMode={gameMode}
+          currentNetWorth={netWorth}
+          currentPropertiesCount={ownedProperties.length}
           onSetTarget={handleSetTarget}
         />
 

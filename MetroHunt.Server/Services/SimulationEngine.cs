@@ -229,8 +229,8 @@ namespace MetroHunt.Server.Services
                     }
                     else
                     {
-                        loan.Principal = Math.Round(loan.Principal * 1.05m, 2);
-                        loan.RemainingBalance = Math.Round(loan.RemainingBalance * 1.05m, 2);
+                        decimal maxLiability = loan.Principal * 1.50m;
+                        loan.RemainingBalance = Math.Min(maxLiability, Math.Round(loan.RemainingBalance * 1.01m, 2));
                     }
                 }
 
@@ -922,6 +922,30 @@ namespace MetroHunt.Server.Services
                     IsActive = true
                 }
             };
+        }
+
+        public async Task AbandonMatchAsync(string playerId)
+        {
+            var player = await _context.Users
+                .Include(u => u.OwnedProperties)
+                .Include(u => u.ActiveLoans)
+                .FirstOrDefaultAsync(u => u.Id == playerId);
+
+            if (player != null)
+            {
+                foreach (var prop in player.OwnedProperties)
+                {
+                    prop.OwnerId = null;
+                    prop.IsOccupied = false;
+                }
+                _context.Loans.RemoveRange(player.ActiveLoans);
+                player.LiquidBalance = 100_000.00m;
+                player.TurnsSurvived = 0;
+                await _context.SaveChangesAsync();
+
+                var leaderboard = await GetLeaderboardAsync();
+                await _hubContext.Clients.All.SendAsync("RaceProgressUpdated", leaderboard);
+            }
         }
     }
 }

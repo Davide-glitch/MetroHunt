@@ -1,8 +1,8 @@
-import React from 'react';
-import { Building2, User, Landmark, RotateCcw, Play, Radio, LogOut, Briefcase, Users } from 'lucide-react';
+import { Building2, User, Landmark, RotateCcw, Play, Radio, LogOut, Briefcase, Users, Flag, UserCheck, Globe } from 'lucide-react';
 
 interface NavbarProps {
   userName?: string;
+  gameMode?: 'solo' | 'multiplayer';
   isSignalRConnected: boolean;
   onOpenAuth: () => void;
   onOpenLoan: () => void;
@@ -13,10 +13,12 @@ interface NavbarProps {
   onResetGame: () => void;
   onLogout: () => void;
   onReturnToLobby?: () => void;
+  onAbandonMatch?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   userName,
+  gameMode = 'solo',
   isSignalRConnected,
   onOpenAuth,
   onOpenLoan,
@@ -26,7 +28,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   isAdvancing,
   onResetGame,
   onLogout,
-  onReturnToLobby
+  onReturnToLobby,
+  onAbandonMatch
 }) => {
   return (
     <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
@@ -40,9 +43,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="font-extrabold text-base tracking-tight text-slate-100">
               METRO HUNT
             </span>
-            <span className="hidden sm:inline-block ml-2 text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              Real Estate Simulation
-            </span>
+            {gameMode === 'solo' ? (
+              <span className="inline-flex items-center gap-1 ml-2 text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                <UserCheck size={10} />
+                Solo Career
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 ml-2 text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20">
+                <Globe size={10} />
+                Multiplayer Race
+              </span>
+            )}
           </div>
         </div>
 
@@ -68,6 +79,22 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Users size={14} className="text-cyan-400" />
               <span className="hidden sm:inline">Lobby Lounge</span>
+            </button>
+          )}
+
+          {/* Abandon Match Button */}
+          {onAbandonMatch && (
+            <button
+              onClick={() => {
+                if (window.confirm("Abandon Match? All your properties will be forfeited back to the market, accumulated debt cleared, and your reserves reset to $100,000.")) {
+                  onAbandonMatch();
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-500/30 transition-colors cursor-pointer"
+              title="Forfeit current session and return to lobby"
+            >
+              <Flag size={13} className="text-rose-400" />
+              <span className="hidden sm:inline">Abandon Match</span>
             </button>
           )}
 

@@ -6,6 +6,9 @@ interface RaceTrackerProps {
   targetNetWorth: number;
   players: PlayerScore[];
   currentPlayerId?: string;
+  gameMode?: 'solo' | 'multiplayer';
+  currentNetWorth?: number;
+  currentPropertiesCount?: number;
   onSetTarget?: (target: number) => void;
 }
 
@@ -13,8 +16,28 @@ export const RaceTracker: React.FC<RaceTrackerProps> = ({
   targetNetWorth,
   players,
   currentPlayerId,
+  gameMode = 'solo',
+  currentNetWorth,
+  currentPropertiesCount = 0,
   onSetTarget
 }) => {
+  const displayPlayers = gameMode === 'solo'
+    ? players.filter(p => p.playerId === currentPlayerId)
+    : players;
+
+  // Fallback row for solo if signalr hasn't sent player score yet
+  const rows = displayPlayers.length > 0
+    ? displayPlayers
+    : currentPlayerId
+      ? [{
+          playerId: currentPlayerId,
+          playerName: 'You',
+          netWorth: currentNetWorth ?? 100_000,
+          propertiesOwned: currentPropertiesCount ?? 0,
+          isEliminated: false
+        }]
+      : [];
+
   return (
     <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 mb-6 shadow-xl backdrop-blur-md">
       <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
@@ -25,14 +48,16 @@ export const RaceTracker: React.FC<RaceTrackerProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-bold tracking-wider text-slate-100 uppercase">
-                First-to-Target Race
+                {gameMode === 'solo' ? 'Solo Tycoon Milestone' : 'Multiplayer First-to-Target Race'}
               </h3>
               <span className="px-2 py-0.5 text-[10px] font-mono bg-amber-500/20 text-amber-300 rounded font-bold">
                 Goal: ${(targetNetWorth / 1_000_000).toFixed(0)}M
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              First investor to cross ${(targetNetWorth / 1_000_000).toFixed(0)}M net worth secures victory
+              {gameMode === 'solo'
+                ? `Build equity and reach $${(targetNetWorth / 1_000_000).toFixed(0)}M net worth to secure financial victory`
+                : `First syndicate investor to cross $${(targetNetWorth / 1_000_000).toFixed(0)}M net worth secures victory`}
             </p>
           </div>
         </div>
@@ -74,12 +99,12 @@ export const RaceTracker: React.FC<RaceTrackerProps> = ({
       </div>
 
       <div className="space-y-4">
-        {players.length === 0 ? (
+        {rows.length === 0 ? (
           <div className="text-xs font-mono text-slate-500 text-center py-2">
             Connecting real-time investors to market state...
           </div>
         ) : (
-          players.map((player) => {
+          rows.map((player) => {
             const isYou = player.playerId === currentPlayerId;
             const progress = Math.min(100, Math.max(0, (player.netWorth / targetNetWorth) * 100));
 

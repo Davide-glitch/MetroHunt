@@ -20,6 +20,19 @@ namespace MetroHunt.Server.DTOs
         public string? GoogleId { get; set; }
     }
 
+    public class SendVerificationCodeDto
+    {
+        public string Email { get; set; } = string.Empty;
+    }
+
+    public class VerifyCodeDto
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Code { get; set; } = string.Empty;
+        public string? UserName { get; set; }
+        public string? Password { get; set; }
+    }
+
     public class AuthResponseDto
     {
         public bool Success { get; set; }

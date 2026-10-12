@@ -17,5 +17,6 @@ namespace MetroHunt.Server.Services
         Task<List<AuditLogDto>> GetAuditLogsAsync(string playerId);
         Task<GameSession> GetOrCreateActiveSessionAsync();
         Task ResetGameAsync();
+        Task AbandonMatchAsync(string playerId);
     }
 }

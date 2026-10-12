@@ -79,5 +79,20 @@ namespace MetroHunt.Server.Controllers
             await _engine.ResetGameAsync();
             return Ok(new { Message = "Game reset to initial state successfully." });
         }
+
+        [HttpPost("abandon")]
+        public async Task<IActionResult> AbandonMatch()
+        {
+            string? playerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(playerId))
+            {
+                var defaultPlayer = await _context.Users.FirstOrDefaultAsync();
+                if (defaultPlayer == null) return Unauthorized("No registered player.");
+                playerId = defaultPlayer.Id;
+            }
+
+            await _engine.AbandonMatchAsync(playerId);
+            return Ok(new { Message = "Match abandoned successfully. Portfolio returned to market." });
+        }
     }
 }
