@@ -62,9 +62,9 @@ export const RaceTracker: React.FC<RaceTrackerProps> = ({
           </div>
         </div>
 
-        {/* Quick Demo Target Selector for Evaluation */}
+        {/* Quick Target Selector */}
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-mono text-slate-500">Evaluation Mode:</span>
+          <span className="text-[11px] font-mono text-slate-500">Target Mode:</span>
           <button
             onClick={() => onSetTarget && onSetTarget(2_000_000)}
             className={`px-2.5 py-1 text-[11px] font-mono rounded border transition-colors cursor-pointer ${

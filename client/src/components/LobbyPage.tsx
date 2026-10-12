@@ -356,7 +356,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
 
                           {/* Animated ready indicator bar */}
                           <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-mono">
-                            <span className="text-slate-400">Evaluation State</span>
+                            <span className="text-slate-400">Investor Status</span>
                             <span className={player.isReady ? 'text-emerald-400 font-semibold' : 'text-slate-500'}>
                               {player.isReady ? '⚡ Confirmed' : 'Waiting for input...'}
                             </span>
