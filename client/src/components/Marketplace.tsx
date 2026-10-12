@@ -66,7 +66,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           const isOwnedByRival = isOwned && !isOwnedByMe;
           const canAfford = liquidBalance >= prop.price && !isOwned;
           const canAffordAudit = liquidBalance >= 25_000 && isOwnedByRival;
-          const visual = getPropertyVisual(prop.type, prop.district, prop.id);
+          const visual = getPropertyVisual(prop.type, prop.district, prop.id, prop.title);
 
           return (
             <div
@@ -81,17 +81,17 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
             >
               <div>
                 {/* Visual Image Header */}
-                <div className="relative h-36 w-full overflow-hidden bg-slate-900">
+                <div className="relative h-40 w-full overflow-hidden bg-slate-900">
                   <img
                     src={visual.image}
                     alt={prop.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 filter brightness-90 group-hover:brightness-100"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 filter brightness-90 group-hover:brightness-100"
                     loading="lazy"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
                   
-                  {/* District Badge */}
-                  <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+                  {/* District & Style Badges */}
+                  <div className="absolute top-2.5 left-2.5 flex flex-wrap items-center gap-1.5 max-w-[85%]">
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider backdrop-blur-md shadow-sm ${
                         prop.district === 'Financial'
@@ -106,7 +106,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                       {prop.district}
                     </span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-slate-950/80 text-slate-300 border border-slate-800 backdrop-blur-md">
-                      {prop.type}
+                      {visual.badge}
                     </span>
                   </div>
 
@@ -114,6 +114,13 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   <div className="absolute top-2.5 right-2.5">
                     <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-950/85 text-slate-300 border border-slate-800 backdrop-blur-md">
                       {prop.condition}% Grade
+                    </span>
+                  </div>
+
+                  {/* Architectural Tag */}
+                  <div className="absolute bottom-2 left-2.5 right-2.5">
+                    <span className="text-[10px] font-mono text-slate-300/90 truncate block drop-shadow-md">
+                      {visual.architecturalStyle}
                     </span>
                   </div>
                 </div>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Building2, Home, CheckCircle2, Wrench } from 'lucide-react';
+import { getPropertyVisual } from '../utils/propertyVisuals';
 
 export interface OwnedProperty {
   id: number;
@@ -65,11 +66,26 @@ export const PortfolioTable: React.FC<PortfolioTableProps> = ({
                 const renoCost = Math.round(prop.price * 0.05);
                 const canAffordReno = liquidBalance >= renoCost;
                 const isPristine = prop.condition >= 100;
+                const visual = getPropertyVisual(prop.type, prop.district, prop.id, prop.title);
 
                 return (
                   <tr key={prop.id} className="hover:bg-slate-800/30 transition-colors">
                     <td className="py-3 font-sans font-semibold text-slate-100">
-                      {prop.title}
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={visual.image}
+                          alt={prop.title}
+                          className="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-800"
+                        />
+                        <div>
+                          <div className="font-semibold text-slate-100 truncate max-w-[200px]" title={prop.title}>
+                            {prop.title}
+                          </div>
+                          <div className="text-[10px] font-mono text-slate-400">
+                            {visual.badge}
+                          </div>
+                        </div>
+                      </div>
                     </td>
                     <td className="py-3">
                       <span className="px-2 py-0.5 rounded text-[11px] bg-slate-800 text-slate-300">
