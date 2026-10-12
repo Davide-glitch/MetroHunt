@@ -76,6 +76,9 @@ export const PortfolioTable: React.FC<PortfolioTableProps> = ({
                           src={visual.image}
                           alt={prop.title}
                           className="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-800"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = '/properties/apartment-loft.jpg';
+                          }}
                         />
                         <div>
                           <div className="font-semibold text-slate-100 truncate max-w-[200px]" title={prop.title}>

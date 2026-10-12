@@ -57,8 +57,8 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
   const readyCount = lobbyState.players.filter(p => p.isReady).length;
   const allReady = totalPlayers > 0 && readyCount === totalPlayers;
 
-  // Local Wi-Fi address for LAN play
-  const localLanUrl = `${window.location.protocol}//${window.location.hostname}:5173`;
+  // Active session URL for multiplayer or mobile hotspot play
+  const localLanUrl = window.location.origin;
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(localLanUrl);
