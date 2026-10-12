@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import * as signalR from '@microsoft/signalr';
 
 export interface VictoryData {
@@ -29,6 +29,8 @@ export interface LobbyPlayer {
 }
 
 export interface LobbyState {
+  roomId?: string;
+  roomName?: string;
   players: LobbyPlayer[];
   targetGoal: number;
   matchActive: boolean;
@@ -36,9 +38,20 @@ export interface LobbyState {
   hostConnectionId?: string;
 }
 
+export interface RoomSummary {
+  roomId: string;
+  roomName: string;
+  targetGoal: number;
+  matchActive: boolean;
+  playerCount: number;
+  playerNames: string[];
+}
+
 interface UseGameHubProps {
   hubUrl?: string;
   token?: string | null;
+  currentUser?: { id: string; userName: string } | null;
+  initialRoomId?: string;
   onVictory?: (victory: VictoryData) => void;
   onPropertyPurchased?: (data: any) => void;
   onTurnAdvanced?: (data: any) => void;
@@ -47,13 +60,16 @@ interface UseGameHubProps {
   onRegulatoryAuditTriggered?: (data: any) => void;
   onGameReset?: () => void;
   onLobbyStateUpdated?: (lobby: LobbyState) => void;
-  onMatchStarted?: (data: { targetGoal: number; playerCount: number; players: LobbyPlayer[] }) => void;
+  onRoomsListUpdated?: (rooms: RoomSummary[]) => void;
+  onMatchStarted?: (data: { roomId?: string; targetGoal: number; playerCount: number; players: LobbyPlayer[] }) => void;
   onReturnedToLobby?: () => void;
 }
 
 export const useGameHub = ({
   hubUrl = '/hubs/game',
   token,
+  currentUser,
+  initialRoomId = 'main',
   onVictory,
   onPropertyPurchased,
   onTurnAdvanced,
@@ -62,12 +78,17 @@ export const useGameHub = ({
   onRegulatoryAuditTriggered,
   onGameReset,
   onLobbyStateUpdated,
+  onRoomsListUpdated,
   onMatchStarted,
   onReturnedToLobby
 }: UseGameHubProps) => {
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [leaderboard, setLeaderboard] = useState<PlayerScore[]>([]);
+  const [currentRoomId, setCurrentRoomId] = useState<string>(initialRoomId);
+  const [roomsList, setRoomsList] = useState<RoomSummary[]>([]);
   const [lobbyState, setLobbyState] = useState<LobbyState>({
+    roomId: 'main',
+    roomName: 'Main Syndicate Lounge',
     players: [],
     targetGoal: 10_000_000,
     matchActive: false,
@@ -124,7 +145,13 @@ export const useGameHub = ({
     // Lobby & Match Synchronization
     connection.on('LobbyStateUpdated', (data: LobbyState) => {
       setLobbyState(data);
+      if (data.roomId) setCurrentRoomId(data.roomId);
       if (onLobbyStateUpdated) onLobbyStateUpdated(data);
+    });
+
+    connection.on('RoomsListUpdated', (data: RoomSummary[]) => {
+      setRoomsList(data);
+      if (onRoomsListUpdated) onRoomsListUpdated(data);
     });
 
     connection.on('MatchStarted', (data) => {
@@ -139,7 +166,8 @@ export const useGameHub = ({
       .then(() => {
         setIsConnected(true);
         console.log('Connected to Metro Hunt GameHub via SignalR.');
-        // Request latest lobby state
+        // Request rooms overview
+        connection.invoke('RequestRoomsList').catch(() => {});
         connection.invoke('RequestLobbyState').catch(() => {});
       })
       .catch((err) => {
@@ -152,42 +180,65 @@ export const useGameHub = ({
     };
   }, [hubUrl, token]);
 
-  // Invocation Helpers
-  const joinLobby = (playerId: string, playerName: string) => {
-    if (connectionRef.current && isConnected) {
-      connectionRef.current.invoke('JoinLobby', playerId, playerName).catch(console.error);
+  // Reactive auto-join whenever SignalR is connected AND user state is known
+  useEffect(() => {
+    if (isConnected && currentUser && currentUser.id && connectionRef.current) {
+      connectionRef.current.invoke('JoinRoom', currentRoomId, currentUser.id, currentUser.userName)
+        .catch((err) => console.warn('Could not auto-join room: ', err));
     }
-  };
+  }, [isConnected, currentUser?.id, currentUser?.userName, currentRoomId]);
 
-  const setReady = (isReady: boolean) => {
+  // Invocation Helpers
+  const joinRoom = useCallback((roomId: string) => {
+    setCurrentRoomId(roomId);
+    if (connectionRef.current && isConnected && currentUser) {
+      connectionRef.current.invoke('JoinRoom', roomId, currentUser.id, currentUser.userName).catch(console.error);
+    }
+  }, [isConnected, currentUser]);
+
+  const joinLobby = useCallback((_playerId?: string, _playerName?: string) => {
+    joinRoom('main');
+  }, [joinRoom]);
+
+  const createRoom = useCallback((roomName: string, targetGoal: number) => {
+    if (connectionRef.current && isConnected && currentUser) {
+      connectionRef.current.invoke('CreateRoom', roomName, targetGoal, currentUser.id, currentUser.userName).catch(console.error);
+    }
+  }, [isConnected, currentUser]);
+
+  const setReady = useCallback((isReady: boolean) => {
     if (connectionRef.current && isConnected) {
       connectionRef.current.invoke('SetReady', isReady).catch(console.error);
     }
-  };
+  }, [isConnected]);
 
-  const setTargetGoal = (targetGoal: number) => {
+  const setTargetGoal = useCallback((targetGoal: number) => {
     if (connectionRef.current && isConnected) {
       connectionRef.current.invoke('SetTargetGoal', targetGoal).catch(console.error);
     }
-  };
+  }, [isConnected]);
 
-  const startMatch = () => {
+  const startMatch = useCallback(() => {
     if (connectionRef.current && isConnected) {
       connectionRef.current.invoke('StartMatch').catch(console.error);
     }
-  };
+  }, [isConnected]);
 
-  const returnToLobby = () => {
+  const returnToLobby = useCallback(() => {
     if (connectionRef.current && isConnected) {
       connectionRef.current.invoke('ReturnToLobby').catch(console.error);
     }
-  };
+  }, [isConnected]);
 
   return {
     isConnected,
     leaderboard,
     lobbyState,
+    roomsList,
+    currentRoomId,
+    joinRoom,
     joinLobby,
+    createRoom,
     setReady,
     setTargetGoal,
     startMatch,

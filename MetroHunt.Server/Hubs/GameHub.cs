@@ -12,22 +12,90 @@ namespace MetroHunt.Server.Hubs
         public bool IsHost { get; set; }
     }
 
+    public class LobbyRoom
+    {
+        public string RoomId { get; set; } = "main";
+        public string RoomName { get; set; } = "Main Syndicate Lounge";
+        public decimal TargetGoal { get; set; } = 10_000_000m;
+        public bool MatchActive { get; set; } = false;
+        public ConcurrentDictionary<string, LobbyPlayer> Players { get; set; } = new();
+    }
+
+    public class RoomSummaryDto
+    {
+        public string RoomId { get; set; } = string.Empty;
+        public string RoomName { get; set; } = string.Empty;
+        public decimal TargetGoal { get; set; }
+        public bool MatchActive { get; set; }
+        public int PlayerCount { get; set; }
+        public List<string> PlayerNames { get; set; } = new();
+    }
+
     public class GameHub : Hub
     {
         private readonly ILogger<GameHub> _logger;
-        private static readonly ConcurrentDictionary<string, LobbyPlayer> _players = new();
-        private static decimal _targetGoal = 10_000_000m;
-        private static bool _matchActive = false;
+
+        // Thread-safe multi-room registry
+        private static readonly ConcurrentDictionary<string, LobbyRoom> _rooms = new();
+        private static readonly ConcurrentDictionary<string, string> _connectionRooms = new();
+
+        static GameHub()
+        {
+            // Seed default persistent public rooms
+            _rooms.TryAdd("main", new LobbyRoom
+            {
+                RoomId = "main",
+                RoomName = "Main Syndicate Lounge",
+                TargetGoal = 10_000_000m
+            });
+            _rooms.TryAdd("high-rollers", new LobbyRoom
+            {
+                RoomId = "high-rollers",
+                RoomName = "High Rollers Suite ($100M)",
+                TargetGoal = 100_000_000m
+            });
+            _rooms.TryAdd("sprint", new LobbyRoom
+            {
+                RoomId = "sprint",
+                RoomName = "Fast 5-Min Sprint ($2M)",
+                TargetGoal = 2_000_000m
+            });
+        }
 
         public GameHub(ILogger<GameHub> logger)
         {
             _logger = logger;
         }
 
-        public async Task JoinLobby(string playerId, string playerName)
+        public async Task JoinRoom(string roomId, string playerId, string playerName)
         {
-            bool isFirst = _players.IsEmpty || !_players.Values.Any(p => p.IsHost);
-            
+            string sanitizedRoomId = string.IsNullOrWhiteSpace(roomId) ? "main" : roomId.Trim().ToLowerInvariant();
+
+            // 1. Remove from previous room if any
+            if (_connectionRooms.TryRemove(Context.ConnectionId, out var oldRoomId))
+            {
+                await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"room_{oldRoomId}");
+                if (_rooms.TryGetValue(oldRoomId, out var oldRoom))
+                {
+                    oldRoom.Players.TryRemove(Context.ConnectionId, out _);
+                    await BroadcastRoomState(oldRoom);
+                }
+            }
+
+            // 2. Ensure target room exists
+            var room = _rooms.GetOrAdd(sanitizedRoomId, id => new LobbyRoom
+            {
+                RoomId = id,
+                RoomName = id == "main" ? "Main Syndicate Lounge" : $"Lobby #{id}",
+                TargetGoal = 10_000_000m
+            });
+
+            // 3. Add to SignalR group
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"room_{sanitizedRoomId}");
+            _connectionRooms[Context.ConnectionId] = sanitizedRoomId;
+
+            // 4. Register player
+            bool isFirst = room.Players.IsEmpty || !room.Players.Values.Any(p => p.IsHost);
             var lobbyPlayer = new LobbyPlayer
             {
                 ConnectionId = Context.ConnectionId,
@@ -37,80 +105,169 @@ namespace MetroHunt.Server.Hubs
                 IsHost = isFirst
             };
 
-            _players[Context.ConnectionId] = lobbyPlayer;
-            _logger.LogInformation("Player {PlayerName} ({PlayerId}) joined lobby. IsHost: {IsHost}", playerName, playerId, isFirst);
+            room.Players[Context.ConnectionId] = lobbyPlayer;
+            _logger.LogInformation("Player {PlayerName} joined room {RoomId}. Host: {IsHost}", lobbyPlayer.PlayerName, sanitizedRoomId, isFirst);
 
-            await BroadcastLobbyState();
+            await BroadcastRoomState(room);
+            await BroadcastRoomsList();
+        }
+
+        public async Task JoinLobby(string playerId, string playerName)
+        {
+            // Backwards compatibility - defaults to main lounge
+            await JoinRoom("main", playerId, playerName);
+        }
+
+        public async Task CreateRoom(string roomName, decimal targetGoal, string playerId, string playerName)
+        {
+            string newRoomId = $"syndicate_{Random.Shared.Next(100, 999)}";
+            var newRoom = new LobbyRoom
+            {
+                RoomId = newRoomId,
+                RoomName = string.IsNullOrWhiteSpace(roomName) ? $"Syndicate Lounge {newRoomId}" : roomName.Trim(),
+                TargetGoal = targetGoal > 0 ? targetGoal : 10_000_000m
+            };
+
+            _rooms[newRoomId] = newRoom;
+            _logger.LogInformation("New custom room created: {RoomName} ({RoomId}) by {PlayerName}", newRoom.RoomName, newRoomId, playerName);
+
+            await JoinRoom(newRoomId, playerId, playerName);
         }
 
         public async Task SetReady(bool isReady)
         {
-            if (_players.TryGetValue(Context.ConnectionId, out var player))
+            if (_connectionRooms.TryGetValue(Context.ConnectionId, out var roomId) &&
+                _rooms.TryGetValue(roomId, out var room) &&
+                room.Players.TryGetValue(Context.ConnectionId, out var player))
             {
                 player.IsReady = isReady;
-                _logger.LogInformation("Player {PlayerName} ready state: {IsReady}", player.PlayerName, isReady);
-                await BroadcastLobbyState();
+                _logger.LogInformation("Player {PlayerName} in room {RoomId} ready state: {IsReady}", player.PlayerName, roomId, isReady);
+                await BroadcastRoomState(room);
             }
         }
 
         public async Task SetTargetGoal(decimal targetGoal)
         {
-            if (_players.TryGetValue(Context.ConnectionId, out var player) && player.IsHost)
+            if (_connectionRooms.TryGetValue(Context.ConnectionId, out var roomId) &&
+                _rooms.TryGetValue(roomId, out var room) &&
+                room.Players.TryGetValue(Context.ConnectionId, out var player) &&
+                player.IsHost)
             {
-                _targetGoal = targetGoal;
-                _logger.LogInformation("Host {PlayerName} set target goal to ${TargetGoal:N0}", player.PlayerName, targetGoal);
-                await BroadcastLobbyState();
+                room.TargetGoal = targetGoal;
+                _logger.LogInformation("Host {PlayerName} set target goal for room {RoomId} to ${TargetGoal:N0}", player.PlayerName, roomId, targetGoal);
+                await BroadcastRoomState(room);
+                await BroadcastRoomsList();
             }
         }
 
         public async Task StartMatch()
         {
-            if (_players.TryGetValue(Context.ConnectionId, out var player) && player.IsHost)
+            if (_connectionRooms.TryGetValue(Context.ConnectionId, out var roomId) &&
+                _rooms.TryGetValue(roomId, out var room) &&
+                room.Players.TryGetValue(Context.ConnectionId, out var player) &&
+                player.IsHost)
             {
-                bool allReady = _players.Values.All(p => p.IsReady);
-                if (allReady && _players.Count > 0)
+                var playerList = room.Players.Values.ToList();
+                bool allReady = playerList.Count > 0 && playerList.All(p => p.IsReady);
+
+                if (allReady)
                 {
-                    _matchActive = true;
-                    _logger.LogInformation("Host {PlayerName} started the match! Target: ${TargetGoal:N0}", player.PlayerName, _targetGoal);
-                    await Clients.All.SendAsync("MatchStarted", new
+                    room.MatchActive = true;
+                    _logger.LogInformation("Host {PlayerName} started match in room {RoomId}! Players: {Count}", player.PlayerName, roomId, playerList.Count);
+
+                    await Clients.Group($"room_{roomId}").SendAsync("MatchStarted", new
                     {
-                        targetGoal = _targetGoal,
-                        playerCount = _players.Count,
-                        players = _players.Values.ToList()
+                        roomId = room.RoomId,
+                        targetGoal = room.TargetGoal,
+                        playerCount = playerList.Count,
+                        players = playerList
                     });
+
+                    await BroadcastRoomsList();
                 }
             }
         }
 
         public async Task ReturnToLobby()
         {
-            _matchActive = false;
-            foreach (var p in _players.Values)
+            if (_connectionRooms.TryGetValue(Context.ConnectionId, out var roomId) &&
+                _rooms.TryGetValue(roomId, out var room))
             {
-                p.IsReady = false;
+                room.MatchActive = false;
+                foreach (var p in room.Players.Values)
+                {
+                    p.IsReady = false;
+                }
+
+                await Clients.Group($"room_{roomId}").SendAsync("ReturnedToLobby");
+                await BroadcastRoomState(room);
+                await BroadcastRoomsList();
             }
-            await Clients.All.SendAsync("ReturnedToLobby");
-            await BroadcastLobbyState();
         }
 
         public async Task RequestLobbyState()
         {
-            await BroadcastLobbyState();
+            if (_connectionRooms.TryGetValue(Context.ConnectionId, out var roomId) &&
+                _rooms.TryGetValue(roomId, out var room))
+            {
+                await Clients.Caller.SendAsync("LobbyStateUpdated", FormatRoomState(room));
+            }
+            else
+            {
+                // Default to main room
+                if (_rooms.TryGetValue("main", out var mainRoom))
+                {
+                    await Clients.Caller.SendAsync("LobbyStateUpdated", FormatRoomState(mainRoom));
+                }
+            }
+            await Clients.Caller.SendAsync("RoomsListUpdated", GetRoomsSummary());
         }
 
-        private async Task BroadcastLobbyState()
+        public async Task RequestRoomsList()
         {
-            var playerList = _players.Values.ToList();
+            await Clients.Caller.SendAsync("RoomsListUpdated", GetRoomsSummary());
+        }
+
+        private async Task BroadcastRoomState(LobbyRoom room)
+        {
+            var state = FormatRoomState(room);
+            await Clients.Group($"room_{room.RoomId}").SendAsync("LobbyStateUpdated", state);
+        }
+
+        private static object FormatRoomState(LobbyRoom room)
+        {
+            var playerList = room.Players.Values.ToList();
             bool allReady = playerList.Count > 0 && playerList.All(p => p.IsReady);
 
-            await Clients.All.SendAsync("LobbyStateUpdated", new
+            return new
             {
+                roomId = room.RoomId,
+                roomName = room.RoomName,
                 players = playerList,
-                targetGoal = _targetGoal,
-                matchActive = _matchActive,
+                targetGoal = room.TargetGoal,
+                matchActive = room.MatchActive,
                 canStart = allReady,
                 hostConnectionId = playerList.FirstOrDefault(p => p.IsHost)?.ConnectionId
-            });
+            };
+        }
+
+        private async Task BroadcastRoomsList()
+        {
+            var summaries = GetRoomsSummary();
+            await Clients.All.SendAsync("RoomsListUpdated", summaries);
+        }
+
+        private static List<RoomSummaryDto> GetRoomsSummary()
+        {
+            return _rooms.Values.Select(r => new RoomSummaryDto
+            {
+                RoomId = r.RoomId,
+                RoomName = r.RoomName,
+                TargetGoal = r.TargetGoal,
+                MatchActive = r.MatchActive,
+                PlayerCount = r.Players.Count,
+                PlayerNames = r.Players.Values.Select(p => p.PlayerName).ToList()
+            }).OrderByDescending(r => r.PlayerCount).ToList();
         }
 
         public async Task JoinSession(string sessionId)
@@ -134,19 +291,23 @@ namespace MetroHunt.Server.Hubs
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
             _logger.LogInformation("Client disconnected: {ConnectionId}", Context.ConnectionId);
-            if (_players.TryRemove(Context.ConnectionId, out var removed))
+
+            if (_connectionRooms.TryRemove(Context.ConnectionId, out var roomId) &&
+                _rooms.TryGetValue(roomId, out var room))
             {
-                // If the host disconnected, assign the first remaining player as host
-                if (removed.IsHost && _players.Count > 0)
+                if (room.Players.TryRemove(Context.ConnectionId, out var removed))
                 {
-                    var newHost = _players.Values.FirstOrDefault();
-                    if (newHost != null)
+                    if (removed.IsHost && room.Players.Count > 0)
                     {
-                        newHost.IsHost = true;
+                        var newHost = room.Players.Values.FirstOrDefault();
+                        if (newHost != null) newHost.IsHost = true;
                     }
+
+                    await BroadcastRoomState(room);
+                    await BroadcastRoomsList();
                 }
-                await BroadcastLobbyState();
             }
+
             await base.OnDisconnectedAsync(exception);
         }
     }

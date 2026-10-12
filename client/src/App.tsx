@@ -58,13 +58,18 @@ export function App() {
     isConnected, 
     leaderboard, 
     lobbyState, 
+    roomsList,
+    currentRoomId,
+    joinRoom,
     joinLobby, 
+    createRoom,
     setReady, 
     setTargetGoal, 
     startMatch, 
     returnToLobby 
   } = useGameHub({
     token,
+    currentUser: user,
     onVictory: (data: VictoryData) => {
       setVictoryData(data);
       showToast(`🏆 Game Over! ${data.winnerName} crossed the target!`);
@@ -557,7 +562,11 @@ export function App() {
       <LobbyPage
         currentUser={user}
         lobbyState={lobbyState}
+        roomsList={roomsList}
+        currentRoomId={currentRoomId}
         isSignalRConnected={isConnected}
+        onJoinRoom={joinRoom}
+        onCreateRoom={createRoom}
         onSetReady={(isReady) => setReady(isReady)}
         onSetTargetGoal={(target) => {
           setTargetGoal(target);

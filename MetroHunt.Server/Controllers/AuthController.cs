@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text;
 using MetroHunt.Server.DTOs;
 using MetroHunt.Server.Models;
+using MetroHunt.Server.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -17,17 +18,20 @@ namespace MetroHunt.Server.Controllers
     {
         private readonly UserManager<PlayerUser> _userManager;
         private readonly SignInManager<PlayerUser> _signInManager;
+        private readonly IEmailSenderService _emailSender;
         private readonly IConfiguration _config;
         private readonly ILogger<AuthController> _logger;
 
         public AuthController(
             UserManager<PlayerUser> userManager,
             SignInManager<PlayerUser> signInManager,
+            IEmailSenderService emailSender,
             IConfiguration config,
             ILogger<AuthController> logger)
         {
             _userManager = userManager;
             _signInManager = signInManager;
+            _emailSender = emailSender;
             _config = config;
             _logger = logger;
         }
@@ -100,7 +104,7 @@ namespace MetroHunt.Server.Controllers
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Code, DateTime Expiry)> _verificationCodes = new();
 
         [HttpPost("send-code")]
-        public IActionResult SendVerificationCode([FromBody] SendVerificationCodeDto dto)
+        public async Task<IActionResult> SendVerificationCode([FromBody] SendVerificationCodeDto dto)
         {
             if (string.IsNullOrWhiteSpace(dto.Email))
             {
@@ -115,11 +119,13 @@ namespace MetroHunt.Server.Controllers
             _logger.LogInformation("EMAIL VERIFICATION CODE FOR {Email}: [ {Code} ]", dto.Email, code);
             _logger.LogInformation("=================================================");
 
+            // Attempt delivery to real email address
+            await _emailSender.SendVerificationCodeAsync(dto.Email, code);
+
             return Ok(new
             {
                 Success = true,
-                Message = $"6-digit verification code dispatched to {dto.Email}.",
-                Code = code // Returned for dev testing & automatic display
+                Message = $"6-digit verification code dispatched to {dto.Email}. Please check your email inbox."
             });
         }
 
@@ -196,7 +202,7 @@ namespace MetroHunt.Server.Controllers
             var user = await _userManager.FindByEmailAsync(dto.Email);
             if (user == null)
             {
-                string chosenName = !string.IsNullOrWhiteSpace(dto.Name) ? dto.Name : dto.Email.Split('@')[0];
+                string chosenName = !string.IsNullOrWhiteSpace(dto.Name) ? dto.Name.Trim() : dto.Email.Split('@')[0];
                 user = new PlayerUser
                 {
                     UserName = chosenName,
@@ -209,19 +215,20 @@ namespace MetroHunt.Server.Controllers
                 var createResult = await _userManager.CreateAsync(user);
                 if (!createResult.Succeeded)
                 {
-                    user.UserName = $"{chosenName}_{Random.Shared.Next(100, 999)}";
+                    user.UserName = $"{chosenName.Replace(" ", "_")}_{Random.Shared.Next(100, 999)}";
                     createResult = await _userManager.CreateAsync(user);
                     if (!createResult.Succeeded)
                     {
-                        return BadRequest(new AuthResponseDto { Success = false, Message = "Could not create user account for Google profile." });
+                        var errors = string.Join("; ", createResult.Errors.Select(e => e.Description));
+                        return BadRequest(new AuthResponseDto { Success = false, Message = errors });
                     }
                 }
             }
             else
             {
-                if (!string.IsNullOrWhiteSpace(dto.Name) && (user.UserName == "investor" || user.UserName == user.Email))
+                if (!string.IsNullOrWhiteSpace(dto.Name) && user.UserName != dto.Name)
                 {
-                    user.UserName = dto.Name;
+                    user.UserName = dto.Name.Trim();
                     await _userManager.UpdateAsync(user);
                 }
             }

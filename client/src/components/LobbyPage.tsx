@@ -12,14 +12,23 @@ import {
   Building2, 
   Target, 
   LogOut, 
-  Layers
+  Layers,
+  Plus,
+  Compass,
+  X,
+  Radio,
+  ArrowRight
 } from 'lucide-react';
-import type { LobbyState } from '../hooks/useGameHub';
+import type { LobbyState, RoomSummary } from '../hooks/useGameHub';
 
 interface LobbyPageProps {
   currentUser: { id: string; userName: string; email: string; liquidBalance: number };
   lobbyState: LobbyState;
+  roomsList?: RoomSummary[];
+  currentRoomId?: string;
   isSignalRConnected: boolean;
+  onJoinRoom?: (roomId: string) => void;
+  onCreateRoom?: (name: string, targetGoal: number) => void;
   onSetReady: (isReady: boolean) => void;
   onSetTargetGoal: (target: number) => void;
   onStartMatch: () => void;
@@ -37,7 +46,11 @@ const GOAL_OPTIONS = [
 export const LobbyPage: React.FC<LobbyPageProps> = ({
   currentUser,
   lobbyState,
+  roomsList = [],
+  currentRoomId = 'main',
   isSignalRConnected,
+  onJoinRoom,
+  onCreateRoom,
   onSetReady,
   onSetTargetGoal,
   onStartMatch,
@@ -47,6 +60,10 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
   const [copiedLink, setCopiedLink] = useState(false);
   const [selectedSoloGoal, setSelectedSoloGoal] = useState<number>(10_000_000);
   const [activeTab, setActiveTab] = useState<'multiplayer' | 'solo'>('multiplayer');
+  const [isBrowseModalOpen, setIsBrowseModalOpen] = useState(false);
+  const [newRoomName, setNewRoomName] = useState('');
+  const [newRoomGoal, setNewRoomGoal] = useState<number>(10_000_000);
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   // Find current user's lobby record
   const currentLobbyPlayer = lobbyState.players.find(p => p.playerId === currentUser.id);
@@ -66,14 +83,34 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
     setTimeout(() => setCopiedLink(false), 3000);
   };
 
+  const getInitials = (name: string) => {
+    if (!name) return 'MH';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
+  const handleCreateRoomSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (onCreateRoom) {
+      onCreateRoom(newRoomName || `${currentUser.userName}'s Suite`, newRoomGoal);
+      setNewRoomName('');
+      setShowCreateForm(false);
+      setIsBrowseModalOpen(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950">
       {/* Top Header */}
       <header className="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center font-black text-slate-950 text-lg shadow-lg shadow-emerald-500/20">
-              MH
+            {/* Visual Icon replacing plain MH text */}
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-emerald-400 via-teal-400 to-cyan-500 flex items-center justify-center text-slate-950 shadow-lg shadow-emerald-500/25">
+              <Building2 size={22} className="stroke-[2.5]" />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -84,7 +121,9 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                   Matchmaking Lounge
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 font-mono">Multiplayer Syndicate Lobby • DBD Ready System</p>
+              <p className="text-[11px] text-slate-400 font-mono">
+                Multi-Room Syndicate Lobby • DBD Ready System
+              </p>
             </div>
           </div>
 
@@ -106,7 +145,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
               <button
                 onClick={onLogout}
                 title="Sign Out"
-                className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
               >
                 <LogOut size={16} />
               </button>
@@ -116,14 +155,14 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
         
-        {/* Mode Selector Tabs */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+        {/* Mode Selector Tabs & Link Sharing Bar */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setActiveTab('multiplayer')}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all cursor-pointer ${
                 activeTab === 'multiplayer'
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold shadow-lg shadow-emerald-500/20'
                   : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
@@ -131,14 +170,14 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
             >
               <Users size={16} />
               <span>Multiplayer Syndicate Match</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/20 text-white font-semibold">
-                {totalPlayers} Online
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/25 text-white font-semibold">
+                {totalPlayers} In Room
               </span>
             </button>
 
             <button
               onClick={() => setActiveTab('solo')}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all cursor-pointer ${
                 activeTab === 'solo'
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold shadow-lg shadow-emerald-500/20'
                   : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
@@ -158,7 +197,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
             </span>
             <button
               onClick={handleCopyLink}
-              className="p-1 hover:bg-cyan-500/20 rounded transition-colors text-cyan-400"
+              className="p-1 hover:bg-cyan-500/20 rounded transition-colors text-cyan-400 cursor-pointer"
               title="Copy link"
             >
               {copiedLink ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
@@ -166,7 +205,58 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
           </div>
         </div>
 
-        {/* Tab 1: MULTIPLAYER LOBBY (DBD Ready System) */}
+        {/* ACTIVE ROOM CONTROL STRIP (Multi-Lobby Concurrency Bar) */}
+        {activeTab === 'multiplayer' && (
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                <Radio size={20} className="animate-pulse" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono uppercase text-slate-400 tracking-wider">Active Lounge:</span>
+                  <span className="font-bold text-sm text-cyan-300">
+                    {lobbyState.roomName || `Room #${currentRoomId}`}
+                  </span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                    ID: {currentRoomId}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Investors in this room play together. Players in other rooms or in solo mode are completely isolated.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateForm(false);
+                  setIsBrowseModalOpen(true);
+                }}
+                className="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm hover:border-cyan-500/40"
+              >
+                <Compass size={14} className="text-cyan-400" />
+                <span>Browse / Switch Lobbies</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateForm(true);
+                  setIsBrowseModalOpen(true);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+              >
+                <Plus size={14} />
+                <span>New Room</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 1: MULTIPLAYER LOBBY (DBD Ready System with Room Isolation) */}
         {activeTab === 'multiplayer' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
@@ -188,108 +278,105 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                 </div>
 
                 {/* Dead by Daylight Style Player Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {lobbyState.players.map((player) => {
-                    const isCurrent = player.playerId === currentUser.id;
-                    return (
-                      <div
-                        key={player.connectionId}
-                        className={`relative rounded-xl p-4 border transition-all duration-300 ${
-                          player.isReady
-                            ? 'bg-emerald-950/20 border-emerald-500/50 shadow-lg shadow-emerald-500/10'
-                            : 'bg-slate-950/50 border-slate-800/90'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className={`h-11 w-11 rounded-xl flex items-center justify-center font-bold text-sm ${
-                              player.isReady 
-                                ? 'bg-gradient-to-br from-emerald-400 to-teal-500 text-slate-950 font-black' 
-                                : 'bg-slate-800 text-slate-300'
-                            }`}>
-                              {player.playerName.substring(0, 2).toUpperCase()}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-bold text-sm text-slate-100">
-                                  {player.playerName}
-                                </span>
-                                {isCurrent && (
-                                  <span className="text-[10px] font-mono bg-cyan-500/20 text-cyan-300 px-1.5 py-0.2 rounded border border-cyan-500/30">
-                                    YOU
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-1 text-[11px] font-mono text-slate-400 mt-0.5">
-                                {player.isHost ? (
-                                  <span className="flex items-center gap-1 text-amber-400 font-semibold">
-                                    <Crown size={11} /> Room Host
-                                  </span>
-                                ) : (
-                                  <span>Syndicate Partner</span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* DBD Style Status Pill */}
-                          <div className={`flex items-center gap-1.5 text-xs font-mono font-bold px-3 py-1.5 rounded-full border ${
+                {lobbyState.players.length === 0 ? (
+                  <div className="p-8 text-center border border-dashed border-slate-800 rounded-xl">
+                    <Clock size={28} className="mx-auto text-slate-600 mb-2 animate-spin" />
+                    <p className="text-sm text-slate-400 font-semibold">Connecting to syndicate room...</p>
+                    <p className="text-xs text-slate-500 mt-1">Synchronizing live investor roster</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {lobbyState.players.map((player) => {
+                      const isCurrent = player.playerId === currentUser.id;
+                      return (
+                        <div
+                          key={player.connectionId}
+                          className={`relative rounded-xl p-4 border transition-all duration-300 ${
                             player.isReady
-                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm shadow-emerald-500/20 animate-pulse'
-                              : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                          }`}>
-                            {player.isReady ? (
-                              <>
-                                <CheckCircle2 size={13} className="text-emerald-400" />
-                                <span>READY</span>
-                              </>
-                            ) : (
-                              <>
-                                <Clock size={13} className="text-rose-400" />
-                                <span>NOT READY</span>
-                              </>
-                            )}
+                              ? 'bg-emerald-950/25 border-emerald-500/60 shadow-lg shadow-emerald-500/10'
+                              : 'bg-slate-950/50 border-slate-800/90'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className={`h-11 w-11 rounded-xl flex items-center justify-center font-bold text-sm ${
+                                player.isReady 
+                                  ? 'bg-gradient-to-br from-emerald-400 to-teal-500 text-slate-950 font-black' 
+                                  : 'bg-slate-800 text-slate-300'
+                              }`}>
+                                {getInitials(player.playerName)}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-bold text-sm text-slate-100">
+                                    {player.playerName}
+                                  </span>
+                                  {isCurrent && (
+                                    <span className="text-[10px] font-mono bg-cyan-500/20 text-cyan-300 px-1.5 py-0.2 rounded border border-cyan-500/30">
+                                      YOU
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1 text-[11px] font-mono text-slate-400 mt-0.5">
+                                  {player.isHost ? (
+                                    <span className="flex items-center gap-1 text-amber-400 font-semibold">
+                                      <Crown size={11} /> Room Host
+                                    </span>
+                                  ) : (
+                                    <span>Syndicate Partner</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* DBD Style Status Pill */}
+                            <div className={`flex items-center gap-1.5 text-xs font-mono font-bold px-3 py-1.5 rounded-full border ${
+                              player.isReady
+                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm shadow-emerald-500/20 animate-pulse'
+                                : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                            }`}>
+                              {player.isReady ? (
+                                <>
+                                  <CheckCircle2 size={13} className="text-emerald-400" />
+                                  <span>READY</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Clock size={13} className="text-rose-400" />
+                                  <span>NOT READY</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Animated ready indicator bar */}
+                          <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-mono">
+                            <span className="text-slate-400">Evaluation State</span>
+                            <span className={player.isReady ? 'text-emerald-400 font-semibold' : 'text-slate-500'}>
+                              {player.isReady ? '⚡ Confirmed' : 'Waiting for input...'}
+                            </span>
                           </div>
                         </div>
+                      );
+                    })}
+                  </div>
+                )}
 
-                        {/* Animated ready indicator bar */}
-                        <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-mono">
-                          <span className="text-slate-400">Evaluation State</span>
-                          <span className={player.isReady ? 'text-emerald-400 font-semibold' : 'text-slate-500'}>
-                            {player.isReady ? '⚡ Confirmed' : 'Waiting for input...'}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {/* Empty Slot for iPhone or Friend */}
-                  {lobbyState.players.length === 1 && (
-                    <div className="rounded-xl p-5 border border-dashed border-slate-800 bg-slate-950/20 flex flex-col items-center justify-center text-center gap-2">
-                      <div className="h-10 w-10 rounded-xl bg-slate-800/50 flex items-center justify-center text-slate-500">
-                        <Smartphone size={18} />
-                      </div>
-                      <div className="text-xs font-semibold text-slate-300">Invite 2nd Player (iPhone / PC)</div>
-                      <p className="text-[11px] text-slate-500 font-mono max-w-xs">
-                        Open <span className="text-cyan-400 underline">{localLanUrl}</span> on your phone on the same Wi-Fi to join!
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Player Self-Ready Toggle Button */}
-                <div className="mt-6 pt-5 border-t border-slate-800 flex items-center justify-between">
-                  <div>
-                    <div className="text-xs font-bold text-slate-200">Your Ready State</div>
-                    <p className="text-[11px] text-slate-400">Lock in your portfolio to allow the host to launch the match</p>
+                {/* Player Self Ready Action Bar */}
+                <div className="mt-6 pt-5 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="text-xs text-slate-400">
+                    <span className="font-semibold text-slate-200">Your Ready State</span>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Lock in your portfolio to allow the host to launch the match
+                    </p>
                   </div>
 
                   <button
                     onClick={() => onSetReady(!isReady)}
-                    className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm tracking-wide transition-all shadow-lg ${
+                    className={`w-full sm:w-auto px-8 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all duration-300 cursor-pointer shadow-lg flex items-center justify-center gap-2 ${
                       isReady
                         ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30'
-                        : 'bg-emerald-500 text-slate-950 hover:bg-emerald-400 shadow-emerald-500/20 hover:scale-[1.02]'
+                        : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-emerald-500/20 hover:brightness-110 active:scale-[0.98]'
                     }`}
                   >
                     {isReady ? (
@@ -307,46 +394,46 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                 </div>
               </div>
 
-              {/* Host Match Launch Box */}
-              <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-6 shadow-xl">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <Crown className="text-amber-400" size={18} />
-                      <h3 className="font-bold text-base text-slate-100">Host Launch Control</h3>
+              {/* Host Launch Control Banner */}
+              {isHost && (
+                <div className={`p-6 rounded-2xl border transition-all duration-300 ${
+                  allReady
+                    ? 'bg-gradient-to-r from-emerald-950/40 to-teal-950/40 border-emerald-500/60 shadow-xl shadow-emerald-500/10'
+                    : 'bg-slate-900/60 border-slate-800'
+                }`}>
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Crown className="text-amber-400" size={18} />
+                        <h3 className="font-bold text-sm text-slate-100">Host Launch Control</h3>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {allReady 
+                          ? 'All syndicate members locked in! Ready to initialize market cycle.'
+                          : `Waiting for all investors to click READY UP (${readyCount}/${totalPlayers} ready)`}
+                      </p>
                     </div>
-                    <p className="text-xs text-slate-400 mt-1">
-                      {allReady
-                        ? '🟢 All investors are locked in and ready. Launch whenever you are prepared!'
-                        : `⏳ Waiting for all investors to click READY UP (${readyCount}/${totalPlayers} ready)`}
-                    </p>
-                  </div>
 
-                  {isHost ? (
                     <button
                       onClick={onStartMatch}
                       disabled={!allReady}
-                      className={`flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-black text-sm tracking-wider uppercase transition-all shadow-xl ${
+                      className={`w-full sm:w-auto px-8 py-3.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-2.5 ${
                         allReady
-                          ? 'bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-500 text-slate-950 hover:brightness-110 shadow-emerald-500/30 scale-105 animate-pulse'
-                          : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50'
+                          ? 'bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 text-slate-950 shadow-lg shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] animate-pulse'
+                          : 'bg-slate-800 text-slate-500 border border-slate-700/60 cursor-not-allowed opacity-60'
                       }`}
                     >
-                      <Play size={18} className="fill-current" />
+                      <Play size={16} className="fill-current" />
                       <span>{allReady ? 'START MULTIPLAYER MATCH' : `LOCKED (${readyCount}/${totalPlayers} READY)`}</span>
                     </button>
-                  ) : (
-                    <div className="text-xs font-mono bg-slate-800/80 px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300">
-                      Waiting for Room Host to start match...
-                    </div>
-                  )}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
-            {/* Right Column: Goal & Mode Selection */}
+            {/* Right Column: Goal Selection & Match Mode */}
             <div className="flex flex-col gap-6">
-              <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-6 shadow-xl">
+              <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-6 shadow-xl backdrop-blur-sm">
                 <div className="flex items-center gap-2 mb-4">
                   <Target className="text-cyan-400" size={18} />
                   <h3 className="font-bold text-sm text-slate-100">Match Target Net Worth</h3>
@@ -410,7 +497,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
           </div>
         )}
 
-        {/* Tab 2: SOLO PRACTICE MODE */}
+        {/* Tab 2: SOLO PRACTICE CHALLENGE */}
         {activeTab === 'solo' && (
           <div className="max-w-2xl mx-auto w-full bg-slate-900/80 border border-slate-800 rounded-2xl p-8 shadow-2xl flex flex-col gap-6">
             <div className="flex items-center gap-3">
@@ -419,7 +506,9 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
               </div>
               <div>
                 <h2 className="text-xl font-bold text-slate-100">Solo Tycoon Challenge</h2>
-                <p className="text-xs text-slate-400">Practice your real estate strategy, broker deals, and race against the market cycle</p>
+                <p className="text-xs text-slate-400">
+                  Practice your real estate strategy, broker deals, and race in your own private sandbox without multiplayer interference
+                </p>
               </div>
             </div>
 
@@ -432,7 +521,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                   <button
                     key={goal.value}
                     onClick={() => setSelectedSoloGoal(goal.value)}
-                    className={`p-4 rounded-xl border text-left transition-all ${
+                    className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
                       selectedSoloGoal === goal.value
                         ? 'bg-emerald-950/30 border-emerald-500 text-emerald-200 shadow-md shadow-emerald-500/10'
                         : 'bg-slate-950/50 border-slate-800 text-slate-400 hover:border-slate-700'
@@ -447,7 +536,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
 
             <button
               onClick={() => onStartSolo(selectedSoloGoal)}
-              className="w-full py-4 rounded-xl font-black text-sm tracking-wider uppercase bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 hover:brightness-110 shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
+              className="w-full py-4 rounded-xl font-black text-sm tracking-wider uppercase bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 hover:brightness-110 shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
             >
               <Play size={18} className="fill-current" />
               <span>START SOLO TYCOON SIMULATION</span>
@@ -455,6 +544,180 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
           </div>
         )}
       </main>
+
+      {/* MULTI-ROOM / LOBBY BROWSER MODAL */}
+      {isBrowseModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden font-sans text-slate-100 animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]">
+            
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
+              <div className="flex items-center gap-2.5">
+                <Compass className="text-cyan-400" size={20} />
+                <h3 className="font-bold text-base text-slate-100">
+                  {showCreateForm ? 'Create Private Syndicate Room' : 'Syndicate Lobby Directory'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBrowseModalOpen(false)}
+                className="text-slate-400 hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+              {showCreateForm ? (
+                <form onSubmit={handleCreateRoomSubmit} className="space-y-4">
+                  <div>
+                    <label className="text-xs font-mono text-slate-400 block mb-1">Room / Syndicate Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={newRoomName}
+                      onChange={(e) => setNewRoomName(e.target.value)}
+                      placeholder={`e.g. ${currentUser.userName}'s Tycoon Arena`}
+                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-cyan-500 transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-mono text-slate-400 block mb-1">Target Net Worth</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {GOAL_OPTIONS.map((goal) => (
+                        <button
+                          type="button"
+                          key={goal.value}
+                          onClick={() => setNewRoomGoal(goal.value)}
+                          className={`p-2.5 rounded-xl border text-left text-xs transition-all cursor-pointer ${
+                            newRoomGoal === goal.value
+                              ? 'bg-cyan-950/40 border-cyan-500 text-cyan-300'
+                              : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="font-bold">{goal.label}</div>
+                          <div className="text-[10px] text-slate-500">{goal.badge}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateForm(false)}
+                      className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-200 cursor-pointer"
+                    >
+                      Back to Directory
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-500 text-slate-950 font-bold text-xs uppercase tracking-wider shadow-lg shadow-cyan-500/20 cursor-pointer hover:brightness-110"
+                    >
+                      Create & Enter Room
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-mono text-slate-400 uppercase tracking-wider">
+                      Available Open Lounges ({roomsList.length})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateForm(true)}
+                      className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus size={14} />
+                      <span>Create New Room</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {roomsList.map((room) => {
+                      const isCurrent = room.roomId === currentRoomId;
+                      return (
+                        <div
+                          key={room.roomId}
+                          className={`p-4 rounded-xl border transition-all flex items-center justify-between ${
+                            isCurrent
+                              ? 'bg-cyan-950/20 border-cyan-500/60 shadow-md'
+                              : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1 pr-3">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-sm text-slate-100 truncate">
+                                {room.roomName}
+                              </span>
+                              {isCurrent && (
+                                <span className="text-[10px] font-mono px-2 py-0.2 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                                  CURRENT
+                                </span>
+                              )}
+                              {room.matchActive && (
+                                <span className="text-[10px] font-mono px-2 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse">
+                                  IN MATCH
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-3 text-xs text-slate-400 mt-1 font-mono">
+                              <span>Target: ${(room.targetGoal / 1_000_000).toLocaleString()}M</span>
+                              <span>•</span>
+                              <span className="text-emerald-400 font-semibold">
+                                {room.playerCount} Investor{room.playerCount === 1 ? '' : 's'} Online
+                              </span>
+                            </div>
+
+                            {room.playerNames && room.playerNames.length > 0 && (
+                              <div className="text-[11px] text-slate-500 mt-1 truncate">
+                                Members: {room.playerNames.join(', ')}
+                              </div>
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={isCurrent}
+                            onClick={() => {
+                              if (onJoinRoom) onJoinRoom(room.roomId);
+                              setIsBrowseModalOpen(false);
+                            }}
+                            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                              isCurrent
+                                ? 'bg-slate-800 text-slate-500 cursor-default'
+                                : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 hover:brightness-110 shadow-md shadow-emerald-500/10'
+                            }`}
+                          >
+                            <span>{isCurrent ? 'Inside' : 'Join Lounge'}</span>
+                            {!isCurrent && <ArrowRight size={13} />}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between text-[11px] font-mono text-slate-500">
+              <span>Rooms are dynamically isolated via SignalR concurrency</span>
+              <button
+                type="button"
+                onClick={() => setIsBrowseModalOpen(false)}
+                className="hover:text-slate-300 cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

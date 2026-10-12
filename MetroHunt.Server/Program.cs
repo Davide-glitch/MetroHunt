@@ -26,6 +26,7 @@ builder.Services.AddIdentity<PlayerUser, IdentityRole>(options =>
     options.Password.RequireUppercase = false;
     options.Password.RequireLowercase = false;
     options.User.RequireUniqueEmail = true;
+    options.User.AllowedUserNameCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._@+ ";
 })
 .AddEntityFrameworkStores<MetroHuntDbContext>()
 .AddDefaultTokenProviders();
@@ -83,8 +84,9 @@ builder.Services.AddAuthorization();
 // 4. SignalR WebSockets
 builder.Services.AddSignalR();
 
-// 5. Simulation Engine Service
+// 5. Simulation Engine & Email Services
 builder.Services.AddScoped<ISimulationEngine, SimulationEngine>();
+builder.Services.AddScoped<IEmailSenderService, SmtpEmailSenderService>();
 
 // 6. Controllers & JSON Options
 builder.Services.AddControllers()

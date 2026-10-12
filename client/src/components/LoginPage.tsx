@@ -25,7 +25,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   // 6-digit OTP fields
   const [otpCode, setOtpCode] = useState('');
   const [codeSent, setCodeSent] = useState(false);
-  const [dispatchedCode, setDispatchedCode] = useState<string | null>(null);
 
   // Google Account Chooser Modal state
   const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
@@ -63,10 +62,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       }
 
       setCodeSent(true);
-      if (data.code) {
-        setDispatchedCode(data.code);
-      }
-      setSuccessMsg(`6-digit verification code generated for ${email}!`);
+      setSuccessMsg(`Verification code sent to ${email}! Please check your email inbox and enter the 6 digits below.`);
     } catch (err: any) {
       setError(err.message || 'Could not send verification code.');
     } finally {
@@ -276,34 +272,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </div>
           )}
 
-          {/* Interactive Dispatched OTP Code Alert (for instant dev testing) */}
-          {dispatchedCode && (
-            <div className="mb-4 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-mono flex flex-col gap-1.5 animate-in slide-in-from-top-2">
-              <div className="flex items-center justify-between">
-                <span className="font-bold flex items-center gap-1.5">
-                  <ShieldCheck size={14} className="text-amber-400" />
-                  Email Verification Code:
-                </span>
-                <span className="text-[10px] text-amber-400/80">Valid 10 mins</span>
-              </div>
-              <div className="flex items-center justify-between bg-slate-950/70 p-2 rounded-lg border border-amber-500/20">
-                <span className="text-sm tracking-widest font-black text-amber-200 font-mono">
-                  {dispatchedCode}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setOtpCode(dispatchedCode)}
-                  className="text-[11px] text-amber-400 hover:text-amber-200 underline cursor-pointer"
-                >
-                  Auto-fill Code
-                </button>
-              </div>
-              <p className="text-[10px] text-slate-400 mt-0.5">
-                In production, this code is transmitted directly to your email inbox via SMTP (SendGrid/Resend).
-              </p>
-            </div>
-          )}
-
           {/* TAB 1: 6-DIGIT EMAIL CODE (OTP) FLOW */}
           {authMode === 'otp' && (
             <div className="space-y-4">
@@ -344,7 +312,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 text-xs font-bold tracking-wide uppercase shadow-lg shadow-emerald-500/20 transition-all cursor-pointer flex items-center justify-center gap-2"
                   >
                     {loading ? (
-                      <span>Sending Code...</span>
+                      <span>Sending Code to Email...</span>
                     ) : (
                       <>
                         <span>Send 6-Digit Verification Code</span>
@@ -362,7 +330,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                         type="button"
                         onClick={() => {
                           setCodeSent(false);
-                          setDispatchedCode(null);
+                          setOtpCode('');
+                          setSuccessMsg(null);
                         }}
                         className="text-[11px] text-emerald-400 hover:underline cursor-pointer"
                       >
