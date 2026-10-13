@@ -53,13 +53,14 @@ export function App() {
     0
   );
 
-  // Ensure default investor authentication so all REST calls succeed smoothly
-  const ensureDefaultSession = async (investorName = 'Davide') => {
+  // Ensure investor authentication so all REST calls succeed smoothly
+  const ensureDefaultSession = async (investorName = '') => {
     try {
+      const effectiveName = investorName.trim() || 'Investor';
       const res = await fetch('/api/auth/google', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: `${investorName.toLowerCase()}@metrohunt.com`, name: investorName })
+        body: JSON.stringify({ email: `${effectiveName.toLowerCase().replace(/[^a-z0-9]/g, '')}@metrohunt.com`, name: effectiveName })
       });
 
       if (res.ok) {
@@ -154,7 +155,7 @@ export function App() {
     const init = async () => {
       let activeToken = token;
       if (!activeToken) {
-        activeToken = await ensureDefaultSession('Davide');
+        activeToken = await ensureDefaultSession();
       }
       await fetchUserData();
       await fetchMarketProperties();
@@ -399,8 +400,8 @@ export function App() {
   // Current player's progress toward their selected net-worth goal.
   const soloLeaderboard: PlayerScore[] = [
     {
-      playerId: user?.id || 'davide',
-      playerName: user?.userName || 'Davide',
+      playerId: user?.id || 'player',
+      playerName: user?.userName || 'You',
       netWorth: netWorth,
       propertiesOwned: ownedProperties.length,
       isEliminated: false
@@ -412,7 +413,7 @@ export function App() {
     return (
       <>
         <LobbyPage
-          initialPlayerName={user?.userName || 'Davide'}
+          initialPlayerName={user?.userName && user.userName !== 'Investor' ? user.userName : ''}
           initialTarget={targetNetWorth}
           onStartCareer={handleStartCareer}
           onNotify={showToast}
@@ -435,7 +436,7 @@ export function App() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950">
       {/* Navigation */}
       <Navbar
-        userName={user?.userName || 'Davide'}
+        userName={user?.userName || 'You'}
         onOpenLobby={() => setCurrentView('lobby')}
         onAbandon={handleAbandonCareer}
         onOpenLoan={() => setIsLoanOpen(true)}

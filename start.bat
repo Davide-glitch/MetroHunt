@@ -13,6 +13,11 @@ if errorlevel 1 (
 
 timeout /t 3 >nul
 
+if not exist "client\node_modules\" (
+    echo First-time run detected: Installing frontend dependencies...
+    cmd /c "cd client && npm install"
+)
+
 echo 2. Starting React + Vite Frontend on port 5173...
 start "MetroHunt.Client" cmd /k "cd client && npm run dev"
 

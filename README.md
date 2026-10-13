@@ -1,42 +1,76 @@
 # Metro Hunt
 
-Metro Hunt is a single-player real estate investing simulation. Build a rental portfolio, manage cash and debt, and see how property costs affect your net worth over time. It is designed for learning and reflection: the numbers are simplified examples, not investment advice or a forecast of real returns.
+Metro Hunt is a single-player real estate investment tycoon simulation. Build a rental portfolio, manage cash and credit, renovate properties, and navigate macro market cycles to grow your net worth.
 
-## What you can practice
+---
 
-- Compare a property's asking price with its expected rent and condition.
-- Track rent against maintenance and loan payments instead of treating rent as profit.
-- Decide how much cash to keep available for repairs and other costs.
-- See how borrowing changes both available cash and net worth.
-- Review transactions in the audit ledger and watch how choices affect your portfolio.
+## Prerequisites (New Device Setup)
 
-The simulation is intentionally simplified. It allows for a basic vacancy reserve and routine maintenance, but does not model taxes, insurance, closing costs, changing interest rates, local regulations, or unpredictable major repairs. Use the game to explore basic trade-offs rather than make real financial decisions.
+To run Metro Hunt on any machine, ensure the following are installed:
+1. **[.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)**
+2. **[Node.js (v18+)](https://nodejs.org/)** with npm
+3. **[Docker Desktop](https://www.docker.com/products/docker-desktop/)** (recommended for SQL Server) or a local SQL Server instance
 
-## Technology
+---
 
-- ASP.NET Core 9 Web API
-- React, TypeScript, and Vite
-- SQL Server with Entity Framework Core
-- Tailwind CSS and Lucide icons
+## Quick Start on a New Device
 
-## Run locally
+### 1. Clone the Repository
+```bash
+git clone https://github.com/Davide-glitch/MetroHunt.git
+cd MetroHunt
+```
 
-Prerequisites: .NET 9 SDK, Node.js with npm, and SQL Server.
+### 2. Start the Database
+If using Docker, start SQL Server with one command:
+```bash
+docker compose up -d
+```
+*(The default connection string in `MetroHunt.Server/appsettings.json` connects automatically to this container on port 1433).*
 
-1. Start SQL Server and make sure `MetroHunt.Server/appsettings.json` or user secrets has a valid `ConnectionStrings:DefaultConnection` value.
-2. From the project root, run:
+### 3. Launch the Project
 
-   ```powershell
-   .\start.bat
-   ```
+**On Windows (Automatic):**
+```powershell
+.\start.bat
+```
+*`start.bat` automatically installs frontend dependencies if missing and starts both the ASP.NET Core backend and React frontend.*
 
-3. Open the client at `http://localhost:5173`. The API runs at `http://localhost:5000`; Swagger is available at `http://localhost:5000/swagger` in Development.
+**Manual / Cross-Platform:**
+- **Terminal 1 (Backend API):**
+  ```bash
+  cd MetroHunt.Server
+  dotnet run --urls http://localhost:5000
+  ```
+- **Terminal 2 (Frontend Client):**
+  ```bash
+  cd client
+  npm install
+  npm run dev
+  ```
 
-The startup script starts the API and client. It does not start SQL Server. If using the included Docker Compose service, start it separately with `docker compose up -d`.
+### 4. Open the App
+- **Game UI**: [http://localhost:5173](http://localhost:5173)
+- **API Swagger**: [http://localhost:5000/swagger](http://localhost:5000/swagger)
 
-## Start a career
+---
 
-Choose an investor profile name and a net-worth goal, then start the career. Use the marketplace to compare listings, buy a property, and follow rent, upkeep, and debt through each market cycle. Renovations and loans use cash or create liabilities, so check your balance and net worth after each decision.
+## How to Play
 
-Use the audit ledger to review what changed and why. A high rent estimate by itself does not guarantee a good investment: purchase price, condition, operating costs, debt, and available reserves all matter.
+1. **Enter Your Investor Name**: Enter any investor profile name and select your target net-worth goal ($2M sprint, $10M standard, or $100M marathon).
+2. **Acquire Properties**: Evaluate listings by district, price, rent yield, and condition. Keep reserves available for unforeseen expenses.
+3. **Renovate Holdings**: Restore depreciated properties to boost occupancy, rental cashflow, and asset valuation.
+4. **Credit Facility**: Take strategic commercial bank loans to acquire high-yield assets, keeping interest payments below recurring rent.
+5. **Work Brokerage Deals**: Close client deals for immediate commission injections.
+6. **Market Cycles**: Advance the macroeconomic cycle manually or let the auto-timer cycle through turns.
+7. **Session Navigation**:
+   - **`Leave`**: Return to the Career Lobby to review goals without losing portfolio progress.
+   - **`Abandon`**: Forfeit holdings back to the market, clear debt, and reset reserves back to $100,000.
 
+---
+
+## Tech Stack
+
+- **Backend**: ASP.NET Core 9 Web API, Entity Framework Core, SQL Server
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS, Lucide Icons
+- **Database**: Microsoft SQL Server 2022

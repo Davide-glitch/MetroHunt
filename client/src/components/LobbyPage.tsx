@@ -27,7 +27,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
   hasActiveCareer = false,
   onResumeCareer
 }) => {
-  const [playerName, setPlayerName] = useState<string>(initialPlayerName || 'Davide');
+  const [playerName, setPlayerName] = useState<string>(initialPlayerName || '');
   const [selectedTarget, setSelectedTarget] = useState<number>(initialTarget || 10_000_000);
 
   const targetOptions = [
@@ -62,8 +62,12 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
   ];
 
   const handleStart = () => {
-    const finalName = playerName.trim() || 'Davide';
-    onStartCareer(finalName, selectedTarget);
+    const trimmed = playerName.trim();
+    if (!trimmed) {
+      onNotify('Please enter your investor profile name to begin.');
+      return;
+    }
+    onStartCareer(trimmed, selectedTarget);
   };
 
   return (
@@ -139,21 +143,9 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                   type="text"
                   value={playerName}
                   onChange={(e) => setPlayerName(e.target.value)}
-                  placeholder="Enter your name (e.g. Davide)"
+                  placeholder="Enter your investor name..."
                   className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-2xl text-sm font-semibold text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500/80 transition-colors"
                 />
-              </div>
-              <div className="flex gap-2 mt-2">
-                {['Davide', 'Elena', 'Marcus'].map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => setPlayerName(preset)}
-                    className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-slate-800/60 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700/40 transition-colors cursor-pointer"
-                  >
-                    {preset}
-                  </button>
-                ))}
               </div>
             </div>
 
