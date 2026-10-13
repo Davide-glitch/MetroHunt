@@ -88,16 +88,16 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 font-mono">
-                Real Estate Tycoon • Singleplayer Mode
+                Real Estate Tycoon • Career Simulation
               </p>
             </div>
           </div>
 
           {/* Market Status Pill */}
           <div className="flex items-center gap-3 text-xs font-mono">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 shadow-sm shadow-emerald-500/10">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Single-player career</span>
+              <span className="font-bold tracking-wider text-[11px] uppercase">ONLINE</span>
             </div>
           </div>
         </div>
