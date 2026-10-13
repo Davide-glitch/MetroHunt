@@ -14,6 +14,14 @@ namespace MetroHunt.Server.DTOs
         public bool IsNewCareer { get; set; } = false;
     }
 
+    public class SavedInvestorDto
+    {
+        public string UserName { get; set; } = string.Empty;
+        public decimal LiquidBalance { get; set; }
+        public int PropertiesCount { get; set; }
+        public int TurnsSurvived { get; set; }
+    }
+
     public class LoginDto
     {
         public string Email { get; set; } = string.Empty;

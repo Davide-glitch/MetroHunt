@@ -21,20 +21,19 @@ git clone https://github.com/Davide-glitch/MetroHunt.git
 cd MetroHunt
 ```
 
-### 2. Start the Database
-If using Docker, start SQL Server with one command:
-```bash
-docker compose up -d
+### 2. One-Click Setup (Windows)
+```powershell
+.\setup.bat
 ```
-*(The default connection string in `MetroHunt.Server/appsettings.json` connects automatically to this container on port 1433).*
+*`setup.bat` checks .NET and Node.js prerequisites, spins up the SQL Server Docker container, and installs all backend and frontend dependencies automatically.*
 
 ### 3. Launch the Project
 
-**On Windows (Automatic):**
+**On Windows:**
 ```powershell
 .\start.bat
 ```
-*`start.bat` automatically installs frontend dependencies if missing and starts both the ASP.NET Core backend and React frontend.*
+*`start.bat` launches both the ASP.NET Core API server and the React frontend.*
 
 **Manual / Cross-Platform:**
 - **Terminal 1 (Backend API):**

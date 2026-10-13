@@ -139,7 +139,7 @@ export function App() {
   // Start New Career from Lobby with Name & Password
   const handleStartCareer = async (chosenName: string, pass: string, chosenTarget: number) => {
     try {
-      const res = await fetch('/api/auth/investor-session', {
+      const res = await fetch('/api/auth/register-investor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userName: chosenName, password: pass, isNewCareer: true })
@@ -151,20 +151,7 @@ export function App() {
         return false;
       }
 
-      localStorage.setItem('metrohunt_token', data.token);
-      setToken(data.token);
-      setUser({
-        id: data.userId,
-        userName: data.userName,
-        email: data.email,
-        liquidBalance: data.liquidBalance
-      });
-
-      await handleSetTarget(chosenTarget);
-      await fetchUserData();
-      await fetchMarketProperties();
-      setCurrentView('game');
-      showToast(data.message);
+      await handleAuthSuccess(data, chosenTarget);
       return true;
     } catch (err: any) {
       showToast(`Connection error: ${err.message}`);
@@ -175,7 +162,7 @@ export function App() {
   // Sign In & Resume Saved Career with Name & Password
   const handleResumeSavedCareer = async (chosenName: string, pass: string) => {
     try {
-      const res = await fetch('/api/auth/investor-session', {
+      const res = await fetch('/api/auth/login-investor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userName: chosenName, password: pass, isNewCareer: false })
@@ -187,24 +174,39 @@ export function App() {
         return false;
       }
 
-      localStorage.setItem('metrohunt_token', data.token);
-      setToken(data.token);
-      setUser({
-        id: data.userId,
-        userName: data.userName,
-        email: data.email,
-        liquidBalance: data.liquidBalance
-      });
-
-      await fetchUserData();
-      await fetchMarketProperties();
-      setCurrentView('game');
-      showToast(data.message);
+      await handleAuthSuccess(data, targetNetWorth);
       return true;
     } catch (err: any) {
       showToast(`Sign in error: ${err.message}`);
       return false;
     }
+  };
+
+  // Unified Auth Handler from InvestorAuthModal
+  const handleAuthSuccess = async (data: {
+    token: string;
+    userId: string;
+    userName: string;
+    email: string;
+    liquidBalance: number;
+    message: string;
+  }, chosenTarget?: number) => {
+    localStorage.setItem('metrohunt_token', data.token);
+    setToken(data.token);
+    setUser({
+      id: data.userId,
+      userName: data.userName,
+      email: data.email,
+      liquidBalance: data.liquidBalance
+    });
+
+    if (chosenTarget && chosenTarget > 0) {
+      await handleSetTarget(chosenTarget);
+    }
+    await fetchUserData();
+    await fetchMarketProperties();
+    setCurrentView('game');
+    showToast(data.message);
   };
 
   // Complete Brokerage Deal Execution
@@ -450,8 +452,7 @@ export function App() {
           initialTarget={targetNetWorth}
           onStartCareer={handleStartCareer}
           onResumeSavedCareer={handleResumeSavedCareer}
-          onBackToGame={() => setCurrentView('game')}
-          hasActiveCareer={!!user && (turnsSurvived > 0 || ownedProperties.length > 0)}
+          onAuthSuccess={handleAuthSuccess}
           onNotify={showToast}
         />
         {/* Live Toast Alert */}
