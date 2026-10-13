@@ -7,6 +7,13 @@ namespace MetroHunt.Server.DTOs
         public string Password { get; set; } = string.Empty;
     }
 
+    public class InvestorAuthDto
+    {
+        public string UserName { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public bool IsNewCareer { get; set; } = false;
+    }
+
     public class LoginDto
     {
         public string Email { get; set; } = string.Empty;

@@ -2,33 +2,39 @@ import React, { useState } from 'react';
 import { 
   Building2, 
   Play, 
-  Users,
+  Users, 
   Sparkles, 
   Landmark, 
   Wrench, 
-  User,
-  CheckCircle2
+  User, 
+  CheckCircle2,
+  Lock,
+  LogIn
 } from 'lucide-react';
 
 interface LobbyPageProps {
   initialPlayerName: string;
   initialTarget: number;
-  onStartCareer: (playerName: string, targetNetWorth: number) => void;
-  onNotify: (message: string) => void;
+  onStartCareer: (playerName: string, password: string, targetNetWorth: number) => Promise<boolean> | void;
+  onResumeSavedCareer: (playerName: string, password: string) => Promise<boolean> | void;
+  onBackToGame?: () => void;
   hasActiveCareer?: boolean;
-  onResumeCareer?: () => void;
+  onNotify: (message: string) => void;
 }
 
 export const LobbyPage: React.FC<LobbyPageProps> = ({
   initialPlayerName,
   initialTarget,
   onStartCareer,
-  onNotify,
+  onResumeSavedCareer,
+  onBackToGame,
   hasActiveCareer = false,
-  onResumeCareer
+  onNotify
 }) => {
   const [playerName, setPlayerName] = useState<string>(initialPlayerName || '');
+  const [password, setPassword] = useState<string>('');
   const [selectedTarget, setSelectedTarget] = useState<number>(initialTarget || 10_000_000);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const targetOptions = [
     {
@@ -61,13 +67,43 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
     }
   ];
 
-  const handleStart = () => {
+  const validateInputs = () => {
     const trimmed = playerName.trim();
     if (!trimmed) {
-      onNotify('Please enter your investor profile name to begin.');
-      return;
+      onNotify('Please enter your investor name (your profile ID).');
+      return null;
     }
-    onStartCareer(trimmed, selectedTarget);
+    if (trimmed.length < 2) {
+      onNotify('Investor name must be at least 2 characters.');
+      return null;
+    }
+    if (!password || password.length < 4) {
+      onNotify('Please enter a password of at least 4 characters to protect your career.');
+      return null;
+    }
+    return trimmed;
+  };
+
+  const handleStart = async () => {
+    const validName = validateInputs();
+    if (!validName) return;
+    setIsSubmitting(true);
+    try {
+      await onStartCareer(validName, password, selectedTarget);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResume = async () => {
+    const validName = validateInputs();
+    if (!validName) return;
+    setIsSubmitting(true);
+    try {
+      await onResumeSavedCareer(validName, password);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -127,7 +163,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
             </h1>
             
             <p className="text-sm text-slate-400 mt-3 leading-relaxed">
-              Practice the decisions behind rental investing: compare purchase price with rent, account for upkeep and debt, and keep reserves for unexpected costs. This simplified simulation is designed to help you explore trade-offs, not promise returns.
+              Practice the decisions behind rental investing: compare purchase price with rent, account for upkeep and debt, and keep reserves for unexpected costs. Each investor has their own independent career and portfolio.
             </p>
           </div>
 
@@ -135,7 +171,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
             {/* Investor Name Input */}
             <div>
               <label className="text-xs font-mono uppercase tracking-wider text-slate-400 block mb-2 font-semibold">
-                Investor Profile Name
+                Investor Name (Your Profile ID)
               </label>
               <div className="relative">
                 <User size={16} className="absolute left-3.5 top-3.5 text-slate-500" />
@@ -143,31 +179,56 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                   type="text"
                   value={playerName}
                   onChange={(e) => setPlayerName(e.target.value)}
-                  placeholder="Enter your investor name..."
+                  placeholder="Enter unique investor name (e.g. Alex)"
                   className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-2xl text-sm font-semibold text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500/80 transition-colors"
                 />
               </div>
+              <p className="text-[11px] text-slate-500 mt-1.5 font-mono">
+                Identifies your personal career and saves your properties.
+              </p>
             </div>
 
-            {/* Starting Balance Overview */}
-            <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 flex flex-col justify-center">
-              <span className="text-xs font-mono uppercase tracking-wider text-slate-400 font-semibold">
-                Starting Cash
+            {/* Password Input */}
+            <div>
+              <label className="text-xs font-mono uppercase tracking-wider text-slate-400 block mb-2 font-semibold">
+                Career Password
+              </label>
+              <div className="relative">
+                <Lock size={16} className="absolute left-3.5 top-3.5 text-slate-500" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter password (min. 4 characters)"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-2xl text-sm font-semibold text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500/80 transition-colors"
+                />
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1.5 font-mono">
+                Protects your career so other investors cannot overwrite your holdings.
+              </p>
+            </div>
+          </div>
+
+          {/* Starting Balance Overview */}
+          <div className="mt-6 p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 flex flex-wrap items-center justify-between gap-4 relative z-10">
+            <div>
+              <span className="text-xs font-mono uppercase tracking-wider text-slate-400 font-semibold block">
+                Starting Cash For New Careers
               </span>
-              <div className="flex items-baseline gap-2 mt-1">
+              <div className="flex items-baseline gap-2 mt-0.5">
                 <span className="text-2xl font-mono font-bold text-emerald-400">$100,000</span>
                 <span className="text-xs font-mono text-slate-500">Available to invest</span>
               </div>
-              <p className="text-[11px] text-slate-500 mt-1">
-                Keep some cash unspent. Property income can be offset by maintenance and loan payments.
-              </p>
             </div>
+            <p className="text-xs text-slate-400 max-w-md">
+              New careers start with $100,000 liquid reserves. Existing investors resume with their exact saved balance, properties, and loans.
+            </p>
           </div>
 
           {/* Victory Milestone Target Options */}
           <div className="mt-8 relative z-10">
             <label className="text-xs font-mono uppercase tracking-wider text-slate-400 block mb-3 font-semibold">
-              Choose a net-worth goal
+              Choose a net-worth goal (For New Careers)
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {targetOptions.map((opt) => {
@@ -206,37 +267,53 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
 
           {/* Career actions */}
           <div className="mt-10 pt-6 border-t border-slate-800/80 flex flex-col sm:flex-row items-stretch sm:items-center gap-4 relative z-10">
-            {hasActiveCareer && onResumeCareer && (
+            {/* Return to Active Floor if previously loaded */}
+            {hasActiveCareer && onBackToGame && (
               <button
                 type="button"
-                onClick={onResumeCareer}
-                className="py-4 px-8 rounded-2xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/40 font-extrabold text-sm uppercase tracking-wider shadow-lg transition-all cursor-pointer flex items-center justify-center gap-3"
+                disabled={isSubmitting}
+                onClick={onBackToGame}
+                className="py-4 px-6 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2"
               >
-                <Play size={18} className="fill-emerald-400 text-emerald-400" />
-                <span>Resume active career</span>
+                <Play size={16} className="text-slate-300" />
+                <span>Return to Floor</span>
               </button>
             )}
 
-            {/* Primary Action Button */}
+            {/* Resume Saved Career */}
             <button
               type="button"
-              onClick={handleStart}
-              className="flex-1 py-4 px-8 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:via-teal-400 hover:to-cyan-400 text-slate-950 font-extrabold text-sm uppercase tracking-wider shadow-xl shadow-emerald-500/25 transition-all transform hover:scale-[1.01] active:scale-[0.99] cursor-pointer flex items-center justify-center gap-3"
+              disabled={isSubmitting}
+              onClick={handleResume}
+              className="flex-1 py-4 px-6 rounded-2xl bg-slate-900 hover:bg-slate-850 text-cyan-300 border border-cyan-500/40 hover:border-cyan-400 font-extrabold text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2.5"
+              title="Sign in with your name and password to resume your saved portfolio"
             >
-              <Play size={18} className="fill-slate-950" />
-              <span>{hasActiveCareer ? 'Start new career' : 'Start investing career'}</span>
+              <LogIn size={16} className="text-cyan-400" />
+              <span>{isSubmitting ? 'Signing in...' : 'Sign In & Resume Career'}</span>
+            </button>
+
+            {/* Start New Career */}
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={handleStart}
+              className="flex-1 py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:via-teal-400 hover:to-cyan-400 text-slate-950 font-extrabold text-xs uppercase tracking-wider shadow-xl shadow-emerald-500/25 transition-all transform hover:scale-[1.01] active:scale-[0.99] cursor-pointer flex items-center justify-center gap-2.5"
+              title="Start a new career with $100,000 cash under this name and password"
+            >
+              <Play size={16} className="fill-slate-950" />
+              <span>{isSubmitting ? 'Starting...' : 'Start New Career'}</span>
             </button>
 
             {/* Future feature */}
             <button
               type="button"
-              onClick={() => onNotify("This feature is planned for a future update.")}
-              className="py-4 px-6 rounded-2xl bg-slate-950/80 hover:bg-slate-850 text-slate-300 hover:text-slate-100 border border-slate-800 hover:border-cyan-500/40 transition-all cursor-pointer flex items-center justify-center gap-2.5 text-xs font-semibold"
+              onClick={() => onNotify("Multiplayer mode is planned for a future update.")}
+              className="py-4 px-5 rounded-2xl bg-slate-950/80 hover:bg-slate-850 text-slate-400 hover:text-slate-200 border border-slate-800/80 transition-all cursor-pointer flex items-center justify-center gap-2 text-xs font-semibold shrink-0"
               title="Planned for a future update"
             >
-              <Users size={16} className="text-cyan-400" />
+              <Users size={15} className="text-slate-500" />
               <span>Multiplayer</span>
-              <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-bold">
+              <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-bold">
                 Soon
               </span>
             </button>
@@ -249,9 +326,9 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
             <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-1">
               <Building2 size={18} />
             </div>
-            <h3 className="text-sm font-bold text-slate-200">Compare the numbers</h3>
+            <h3 className="text-sm font-bold text-slate-200">Unique Investor Careers</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Compare asking prices, rent, and property condition. A higher rent figure alone does not make a property a better investment.
+              Each investor profile has its own balance, properties, and credit facilities. Sign in anytime with your password to resume your journey.
             </p>
           </div>
 
@@ -259,7 +336,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
             <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-1">
               <Wrench size={18} />
             </div>
-            <h3 className="text-sm font-bold text-slate-200">Budget for upkeep</h3>
+            <h3 className="text-sm font-bold text-slate-200">Budget for Upkeep</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
               Repairs and improvements cost cash. Consider whether the expected rent or condition benefit justifies the expense.
             </p>
@@ -269,7 +346,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
             <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-1">
               <Landmark size={18} />
             </div>
-            <h3 className="text-sm font-bold text-slate-200">Understand borrowing</h3>
+            <h3 className="text-sm font-bold text-slate-200">Understand Borrowing</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
               Borrowing can increase buying power, but payments and remaining debt reduce the value of your portfolio.
             </p>

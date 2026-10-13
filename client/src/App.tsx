@@ -53,33 +53,7 @@ export function App() {
     0
   );
 
-  // Ensure investor authentication so all REST calls succeed smoothly
-  const ensureDefaultSession = async (investorName = '') => {
-    try {
-      const effectiveName = investorName.trim() || 'Investor';
-      const res = await fetch('/api/auth/google', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: `${effectiveName.toLowerCase().replace(/[^a-z0-9]/g, '')}@metrohunt.com`, name: effectiveName })
-      });
 
-      if (res.ok) {
-        const data = await res.json();
-        localStorage.setItem('metrohunt_token', data.token);
-        setToken(data.token);
-        setUser({
-          id: data.userId,
-          userName: data.userName,
-          email: data.email,
-          liquidBalance: data.liquidBalance
-        });
-        return data.token;
-      }
-    } catch (err) {
-      console.warn('Auto-session initialization fallback:', err);
-    }
-    return null;
-  };
 
   // Fetch Current User
   const fetchUserData = async () => {
@@ -153,25 +127,84 @@ export function App() {
   // Initialize data on mount
   useEffect(() => {
     const init = async () => {
-      let activeToken = token;
-      if (!activeToken) {
-        activeToken = await ensureDefaultSession();
+      if (token) {
+        await fetchUserData();
+        await fetchMarketProperties();
+        await fetchSession();
       }
-      await fetchUserData();
-      await fetchMarketProperties();
-      await fetchSession();
     };
     init();
   }, [token]);
 
-  // Start Career from Lobby
-  const handleStartCareer = async (chosenName: string, chosenTarget: number) => {
-    await ensureDefaultSession(chosenName);
-    await handleSetTarget(chosenTarget);
-    await fetchUserData();
-    await fetchMarketProperties();
-    setCurrentView('game');
-    showToast(`Career started. Before buying, compare rent with upkeep and keep cash available for repairs.`);
+  // Start New Career from Lobby with Name & Password
+  const handleStartCareer = async (chosenName: string, pass: string, chosenTarget: number) => {
+    try {
+      const res = await fetch('/api/auth/investor-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userName: chosenName, password: pass, isNewCareer: true })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        showToast(data.message || 'Could not initialize career session.');
+        return false;
+      }
+
+      localStorage.setItem('metrohunt_token', data.token);
+      setToken(data.token);
+      setUser({
+        id: data.userId,
+        userName: data.userName,
+        email: data.email,
+        liquidBalance: data.liquidBalance
+      });
+
+      await handleSetTarget(chosenTarget);
+      await fetchUserData();
+      await fetchMarketProperties();
+      setCurrentView('game');
+      showToast(data.message);
+      return true;
+    } catch (err: any) {
+      showToast(`Connection error: ${err.message}`);
+      return false;
+    }
+  };
+
+  // Sign In & Resume Saved Career with Name & Password
+  const handleResumeSavedCareer = async (chosenName: string, pass: string) => {
+    try {
+      const res = await fetch('/api/auth/investor-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userName: chosenName, password: pass, isNewCareer: false })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        showToast(data.message || 'Incorrect investor name or password.');
+        return false;
+      }
+
+      localStorage.setItem('metrohunt_token', data.token);
+      setToken(data.token);
+      setUser({
+        id: data.userId,
+        userName: data.userName,
+        email: data.email,
+        liquidBalance: data.liquidBalance
+      });
+
+      await fetchUserData();
+      await fetchMarketProperties();
+      setCurrentView('game');
+      showToast(data.message);
+      return true;
+    } catch (err: any) {
+      showToast(`Sign in error: ${err.message}`);
+      return false;
+    }
   };
 
   // Complete Brokerage Deal Execution
@@ -416,9 +449,10 @@ export function App() {
           initialPlayerName={user?.userName && user.userName !== 'Investor' ? user.userName : ''}
           initialTarget={targetNetWorth}
           onStartCareer={handleStartCareer}
+          onResumeSavedCareer={handleResumeSavedCareer}
+          onBackToGame={() => setCurrentView('game')}
+          hasActiveCareer={!!user && (turnsSurvived > 0 || ownedProperties.length > 0)}
           onNotify={showToast}
-          hasActiveCareer={turnsSurvived > 0 || ownedProperties.length > 0}
-          onResumeCareer={() => setCurrentView('game')}
         />
         {/* Live Toast Alert */}
         {toastMessage && (

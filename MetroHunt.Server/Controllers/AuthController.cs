@@ -12,6 +12,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
+using MetroHunt.Server.Data;
+
 namespace MetroHunt.Server.Controllers
 {
     [ApiController]
@@ -22,17 +24,119 @@ namespace MetroHunt.Server.Controllers
         private readonly SignInManager<PlayerUser> _signInManager;
         private readonly IEmailSenderService _emailSender;
         private readonly IConfiguration _config;
+        private readonly MetroHuntDbContext _context;
 
         public AuthController(
             UserManager<PlayerUser> userManager,
             SignInManager<PlayerUser> signInManager,
             IEmailSenderService emailSender,
-            IConfiguration config)
+            IConfiguration config,
+            MetroHuntDbContext context)
         {
             _userManager = userManager;
             _signInManager = signInManager;
             _emailSender = emailSender;
             _config = config;
+            _context = context;
+        }
+
+        [HttpPost("investor-session")]
+        public async Task<ActionResult<AuthResponseDto>> InvestorSession([FromBody] InvestorAuthDto dto)
+        {
+            if (string.IsNullOrWhiteSpace(dto.UserName) || string.IsNullOrWhiteSpace(dto.Password))
+            {
+                return BadRequest(new AuthResponseDto { Success = false, Message = "Investor name and password are required." });
+            }
+
+            var cleanName = dto.UserName.Trim();
+            if (cleanName.Length < 2)
+            {
+                return BadRequest(new AuthResponseDto { Success = false, Message = "Investor name must be at least 2 characters." });
+            }
+
+            if (dto.Password.Length < 4)
+            {
+                return BadRequest(new AuthResponseDto { Success = false, Message = "Password must be at least 4 characters." });
+            }
+
+            // Find user by UserName
+            var user = await _userManager.FindByNameAsync(cleanName);
+
+            if (user == null)
+            {
+                // New Investor: register fresh profile
+                var cleanEmail = $"{cleanName.ToLowerInvariant().Replace(" ", "_").Replace("@", "_")}@metrohunt.local";
+                user = new PlayerUser
+                {
+                    UserName = cleanName,
+                    Email = cleanEmail,
+                    LiquidBalance = 100_000.00m,
+                    TurnsSurvived = 0,
+                    EmailConfirmed = true
+                };
+
+                var createResult = await _userManager.CreateAsync(user, dto.Password);
+                if (!createResult.Succeeded)
+                {
+                    var errors = string.Join("; ", createResult.Errors.Select(e => e.Description));
+                    return BadRequest(new AuthResponseDto { Success = false, Message = errors });
+                }
+
+                var token = GenerateJwtToken(user, cleanName);
+                return Ok(new AuthResponseDto
+                {
+                    Success = true,
+                    Message = $"Welcome, {cleanName}! Your new career has started with $100,000 in liquid reserves.",
+                    Token = token,
+                    UserId = user.Id,
+                    UserName = cleanName,
+                    Email = user.Email ?? cleanEmail,
+                    LiquidBalance = user.LiquidBalance
+                });
+            }
+
+            // Existing Investor: verify password
+            var passwordCheck = await _signInManager.CheckPasswordSignInAsync(user, dto.Password, false);
+            if (!passwordCheck.Succeeded)
+            {
+                return Unauthorized(new AuthResponseDto 
+                { 
+                    Success = false, 
+                    Message = $"Incorrect password for investor '{cleanName}'." 
+                });
+            }
+
+            // If user explicitly chose to start a brand new career under this profile
+            if (dto.IsNewCareer)
+            {
+                var userProps = await _context.Properties.Where(p => p.OwnerId == user.Id).ToListAsync();
+                foreach (var p in userProps)
+                {
+                    p.OwnerId = null;
+                    p.IsOccupied = false;
+                }
+                var userLoans = await _context.Loans.Where(l => l.PlayerUserId == user.Id).ToListAsync();
+                _context.Loans.RemoveRange(userLoans);
+
+                user.LiquidBalance = 100_000.00m;
+                user.TurnsSurvived = 0;
+                await _userManager.UpdateAsync(user);
+                await _context.SaveChangesAsync();
+            }
+
+            var loginToken = GenerateJwtToken(user, cleanName);
+            return Ok(new AuthResponseDto
+            {
+                Success = true,
+                Message = dto.IsNewCareer
+                    ? $"New career initialized for {cleanName} with $100,000."
+                    : $"Welcome back, {cleanName}! Loaded your saved investment portfolio.",
+                Token = loginToken,
+                UserId = user.Id,
+                UserName = cleanName,
+                Email = user.Email ?? "",
+                LiquidBalance = user.LiquidBalance
+            });
         }
 
         [HttpPost("register")]
