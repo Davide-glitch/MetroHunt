@@ -137,7 +137,7 @@ namespace MetroHunt.Server.Hubs
             var newRoom = new LobbyRoom
             {
                 RoomId = newRoomId,
-                RoomName = string.IsNullOrWhiteSpace(roomName) ? $"Syndicate Lounge {newRoomId}" : roomName.Trim(),
+                RoomName = string.IsNullOrWhiteSpace(roomName) ? $"Market Room {newRoomId}" : roomName.Trim(),
                 TargetGoal = targetGoal > 0 ? targetGoal : 10_000_000m
             };
 

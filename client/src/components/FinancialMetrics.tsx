@@ -58,7 +58,7 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
         <div className="flex justify-between items-start mb-2">
           <span className="text-xs font-mono text-slate-400 uppercase tracking-wider">
-            Net Monthly Yield
+            Operating Cash Flow Estimate
           </span>
           <div className={`p-2 rounded-xl border ${
             monthlyCashflow >= 0
@@ -74,7 +74,7 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
           {monthlyCashflow >= 0 ? '+' : ''}${monthlyCashflow.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo
         </div>
         <div className="text-xs text-slate-500 mt-2">
-          Rent minus maintenance & interest
+          Rent after vacancy reserve, less upkeep; before loan payments
         </div>
       </div>
 
@@ -82,17 +82,17 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
         <div className="flex justify-between items-start mb-2">
           <span className="text-xs font-mono text-slate-400 uppercase tracking-wider">
-            Macro Environment
+            Reference Rate
           </span>
           <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400">
             <Landmark size={18} />
           </div>
         </div>
         <div className="text-2xl font-bold font-mono text-slate-100 tracking-tight">
-          {(centralBankRate * 100).toFixed(1)}% <span className="text-sm font-normal text-slate-400">APR</span>
+          {(centralBankRate * 100).toFixed(1)}% <span className="text-sm font-normal text-slate-400">fixed</span>
         </div>
         <div className="text-xs text-slate-500 mt-2">
-          Cycle: Turn #{turnsSurvived}
+          Cycle {turnsSurvived} · reference only
         </div>
       </div>
     </div>

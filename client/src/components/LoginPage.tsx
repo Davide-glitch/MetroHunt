@@ -193,20 +193,22 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
       <div className="w-full max-w-md relative z-10">
         {/* Brand Banner */}
-        <div className="text-center mb-8">
-          <img 
-            src="/metrohunt-icon.jpg" 
-            alt="Metro Hunt Logo" 
-            className="w-16 h-16 rounded-2xl object-cover mx-auto shadow-2xl shadow-cyan-500/30 border border-cyan-500/30 mb-3" 
-          />
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-100">
-            METRO HUNT
-          </h1>
-          <p className="text-xs font-mono text-emerald-400 mt-1 uppercase tracking-widest">
-            Real Estate Tycoon Multiplayer
+        <div className="flex flex-col items-center mb-6">
+          <div className="flex items-center gap-3">
+            <img 
+              src="/metrohunt-mark.svg" 
+              alt="Metro Hunt Logo" 
+              className="h-10 w-10 rounded-xl object-cover shadow-lg shadow-cyan-500/25 border border-cyan-500/30 shrink-0" 
+            />
+            <span className="font-extrabold tracking-wider text-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">
+              METRO HUNT
+            </span>
+          </div>
+          <p className="text-xs font-mono text-emerald-400/90 mt-1 uppercase tracking-widest">
+            Real Estate Tycoon Simulation
           </p>
-          <p className="text-xs text-slate-400 mt-2 max-w-xs mx-auto">
-            Sign in to access your portfolio, broker deals, and compete in the real-time net worth race
+          <p className="text-xs text-slate-400 mt-2 max-w-xs text-center">
+            Sign in to access your portfolio, broker deals, and build your real estate empire
           </p>
         </div>
 
@@ -582,11 +584,21 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               <>
                 {/* App Branding Header */}
                 <div className="px-6 pt-5 pb-3">
-                  <img 
-                    src="/metrohunt-icon.jpg" 
-                    alt="Metro Hunt Logo" 
-                    className="w-10 h-10 rounded-xl object-cover border border-cyan-500/30 mb-3 shadow-md" 
-                  />
+                  <div className="flex items-center gap-3 mb-3">
+                    <img 
+                      src="/metrohunt-mark.svg" 
+                      alt="Metro Hunt Logo" 
+                      className="h-10 w-10 rounded-xl object-cover shadow-lg shadow-cyan-500/25 border border-cyan-500/30 shrink-0" 
+                    />
+                    <div>
+                      <span className="font-extrabold tracking-wider text-base bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent block">
+                        METRO HUNT
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        Real Estate Tycoon
+                      </span>
+                    </div>
+                  </div>
                   <h2 className="text-xl font-bold text-slate-100">Choose an account</h2>
                   <p className="text-xs text-slate-400 mt-0.5">
                     to continue to <strong className="text-slate-200">Metro Hunt</strong>

@@ -16,13 +16,13 @@ namespace MetroHunt.Server.DTOs
     public class GoogleAuthDto
     {
         public string Email { get; set; } = string.Empty;
-        public string Name { get; set; } = string.Empty;
-        public string? GoogleId { get; set; }
+        public string? Name { get; set; }
     }
 
     public class SendVerificationCodeDto
     {
         public string Email { get; set; } = string.Empty;
+        public string Purpose { get; set; } = "login";
     }
 
     public class VerifyCodeDto
@@ -31,6 +31,7 @@ namespace MetroHunt.Server.DTOs
         public string Code { get; set; } = string.Empty;
         public string? UserName { get; set; }
         public string? Password { get; set; }
+        public string Purpose { get; set; } = "login";
     }
 
     public class AuthResponseDto

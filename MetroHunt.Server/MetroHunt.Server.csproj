@@ -2,9 +2,11 @@
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
+    <BaseOutputPath>bin\MetroHunt\</BaseOutputPath>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>MetroHunt.Api</AssemblyName>
+    <UserSecretsId>MetroHunt-Local-Development-4f21bd71-a193-4b30-88ad-57441dc67e03</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

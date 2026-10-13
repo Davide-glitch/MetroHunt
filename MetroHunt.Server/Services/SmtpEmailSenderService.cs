@@ -24,7 +24,8 @@ namespace MetroHunt.Server.Services
             string fromName = _config["Smtp:FromName"] ?? "Metro Hunt Real Estate Tycoon";
 
             // If SMTP credentials configured, attempt real network delivery
-            if (!string.IsNullOrWhiteSpace(host) && !string.IsNullOrWhiteSpace(userName) && !string.IsNullOrWhiteSpace(password))
+            if (!string.IsNullOrWhiteSpace(host) && !string.IsNullOrWhiteSpace(userName)
+                && !string.IsNullOrWhiteSpace(password) && !password.StartsWith("YOUR_"))
             {
                 try
                 {
@@ -38,17 +39,17 @@ namespace MetroHunt.Server.Services
                     using var message = new MailMessage
                     {
                         From = new MailAddress(fromEmail, fromName),
-                        Subject = $"Your Metro Hunt Verification Code: {code}",
+                        Subject = "Your Metro Hunt sign-in code",
                         IsBodyHtml = true,
                         Body = $@"
                         <div style='background-color:#020617; color:#f8fafc; font-family:sans-serif; padding:32px; border-radius:16px; max-width:520px; margin:auto; border:1px solid #1e293b;'>
                             <div style='text-align:center; margin-bottom:24px;'>
                                 <h1 style='color:#10b981; margin:0; font-size:26px; font-weight:900; letter-spacing:1px;'>METRO HUNT</h1>
-                                <p style='color:#94a3b8; font-size:12px; margin-top:4px; text-transform:uppercase; letter-spacing:2px;'>Real Estate Simulation & Syndicate</p>
+                            <p style='color:#94a3b8; font-size:12px; margin-top:4px; text-transform:uppercase; letter-spacing:2px;'>Property market game</p>
                             </div>
                             <hr style='border:none; border-top:1px solid #1e293b; margin:20px 0;'/>
-                            <p style='font-size:15px; color:#f1f5f9; line-height:1.5;'>Hello <strong>{recipientName ?? "Investor"}</strong>,</p>
-                            <p style='font-size:14px; color:#cbd5e1; line-height:1.5;'>Use the one-time 6-digit verification code below to authenticate your investor portfolio:</p>
+                            <p style='font-size:15px; color:#f1f5f9; line-height:1.5;'>Hello <strong>{WebUtility.HtmlEncode(recipientName ?? "there")}</strong>,</p>
+                            <p style='font-size:14px; color:#cbd5e1; line-height:1.5;'>Enter this one-time code to sign in to your Metro Hunt account:</p>
                             
                             <div style='background-color:#0f172a; border:2px solid #10b981; border-radius:14px; padding:20px; text-align:center; margin:24px 0;'>
                                 <div style='font-size:36px; letter-spacing:10px; font-weight:900; color:#34d399; font-family:monospace; padding-left:10px;'>{code}</div>
@@ -62,7 +63,8 @@ namespace MetroHunt.Server.Services
                     };
                     message.To.Add(new MailAddress(toEmail));
 
-                    await client.SendMailAsync(message);
+                    using var sendTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                    await client.SendMailAsync(message, sendTimeout.Token);
                     _logger.LogInformation("Successfully dispatched real verification email via SMTP to {Email}", toEmail);
                     return true;
                 }
@@ -73,7 +75,7 @@ namespace MetroHunt.Server.Services
             }
             else
             {
-                _logger.LogInformation("SMTP credentials not filled in appsettings.json. Dispatched simulated code for {Email}: [ {Code} ]", toEmail, code);
+                _logger.LogWarning("SMTP settings are incomplete; verification email to {Email} was not sent.", toEmail);
             }
 
             return false;

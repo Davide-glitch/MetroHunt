@@ -1,49 +1,43 @@
 import { useState, useEffect } from 'react';
 import { Navbar } from './components/Navbar';
 import { RaceTracker } from './components/RaceTracker';
+import type { PlayerScore } from './components/RaceTracker';
 import { FinancialMetrics } from './components/FinancialMetrics';
 import { PortfolioTable } from './components/PortfolioTable';
 import type { OwnedProperty } from './components/PortfolioTable';
 import { Marketplace } from './components/Marketplace';
 import type { MarketProperty } from './components/Marketplace';
 import { LoanModal } from './components/LoanModal';
-import { AuthModal } from './components/AuthModal';
 import { VictoryModal } from './components/VictoryModal';
-import { AuditLedger } from './components/AuditLedger';
-import type { AuditLogItem } from './components/AuditLedger';
-import { LoginPage } from './components/LoginPage';
+import type { VictoryData } from './components/VictoryModal';
 import { LobbyPage } from './components/LobbyPage';
 import { WorkDealModal } from './components/WorkDealModal';
 import { MarketCycleTimer } from './components/MarketCycleTimer';
-import { useGameHub } from './hooks/useGameHub';
-import type { VictoryData } from './hooks/useGameHub';
 import { Sparkles } from 'lucide-react';
 
 export function App() {
-  // Navigation: 3-page flow ('login' handled by !user, 'lobby' is room/matchmaking, 'game' is board)
+  // Navigation: Starts directly at the Singleplayer Lobby (Mission Control)
   const [currentView, setCurrentView] = useState<'lobby' | 'game'>('lobby');
-  const [gameMode, setGameMode] = useState<'solo' | 'multiplayer'>('solo');
 
-  // State
+  // Authentication & Session State
   const [user, setUser] = useState<{ id: string; userName: string; email: string; liquidBalance: number } | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem('metrohunt_token'));
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('metrohunt_token'));
+
+  // Financial Simulation State
   const [netWorth, setNetWorth] = useState<number>(100_000);
   const [turnsSurvived, setTurnsSurvived] = useState<number>(0);
   const [centralBankRate] = useState<number>(0.05);
   const [targetNetWorth, setTargetNetWorth] = useState<number>(10_000_000);
   const [ownedProperties, setOwnedProperties] = useState<OwnedProperty[]>([]);
   const [marketProperties, setMarketProperties] = useState<MarketProperty[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   
   // UI Modals & Actions
-  const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
   const [isLoanOpen, setIsLoanOpen] = useState<boolean>(false);
   const [isWorkDealOpen, setIsWorkDealOpen] = useState<boolean>(false);
   const [victoryData, setVictoryData] = useState<VictoryData | null>(null);
   const [isAdvancing, setIsAdvancing] = useState<boolean>(false);
   const [isBuying, setIsBuying] = useState<boolean>(false);
   const [isRenovating, setIsRenovating] = useState<boolean>(false);
-  const [isAuditing, setIsAuditing] = useState<boolean>(false);
   const [isTakingLoan, setIsTakingLoan] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -53,95 +47,38 @@ export function App() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // SignalR Hub Hook with Lobby & DBD Ready System
-  const { 
-    isConnected, 
-    leaderboard, 
-    lobbyState, 
-    roomsList,
-    currentRoomId,
-    joinRoom,
-    joinLobby, 
-    createRoom,
-    setReady, 
-    setTargetGoal, 
-    startMatch, 
-    returnToLobby,
-    surrenderMatch
-  } = useGameHub({
-    token,
-    currentUser: user,
-    onVictory: (data: VictoryData) => {
-      setVictoryData(data);
-      showToast(`🏆 Game Over! ${data.winnerName} crossed the target!`);
-      fetchAuditLogs();
-    },
-    onMatchStarted: (data) => {
-      setGameMode('multiplayer');
-      setCurrentView('game');
-      setTargetNetWorth(data.targetGoal);
-      showToast(`🚀 Multiplayer Match Started! Target: $${(data.targetGoal / 1_000_000).toLocaleString()}M`);
-      fetchUserData();
-      fetchMarketProperties();
-      fetchAuditLogs();
-    },
-    onReturnedToLobby: () => {
-      setCurrentView('lobby');
-      showToast('Returned to Multiplayer Matchmaking Lounge.');
-    },
-    onPropertyPurchased: (data: any) => {
-      showToast(`⚡ Market Shift: ${data.buyerName} acquired ${data.title}!`);
-      fetchMarketProperties();
-      fetchUserData();
-      fetchAuditLogs();
-    },
-    onTurnAdvanced: (data: any) => {
-      showToast(`Turn ${data.round} processed for ${data.playerName} (Net: $${data.netCashflow?.toLocaleString()})`);
-      fetchMarketProperties();
-      fetchUserData();
-      fetchAuditLogs();
-    },
-    onMarketEvent: (data: any) => {
-      showToast(`📢 Macro Alert: ${data.title} - ${data.description}`);
-    },
-    onPropertyRenovated: (data: any) => {
-      showToast(`🔧 Capital Upgrade: ${data.ownerName} renovated ${data.title} to 100%!`);
-      fetchMarketProperties();
-      fetchUserData();
-      fetchAuditLogs();
-    },
-    onRegulatoryAuditTriggered: (data: any) => {
-      showToast(`🚨 Code Violation: ${data.investorName} filed inspection on ${data.targetProperty}! Penalty: $${data.penaltyAmount?.toLocaleString()}`);
-      fetchMarketProperties();
-      fetchUserData();
-      fetchAuditLogs();
-    },
-    onGameReset: () => {
-      setVictoryData(null);
-      showToast('Game state has been reset.');
-      fetchUserData();
-      fetchMarketProperties();
-      fetchAuditLogs();
-    },
-    onPlayerSurrendered: (data) => {
-      showToast(`🏳 ${data.playerName} surrendered! ${data.remainingPlayers} investor(s) remain in the match.`);
-    },
-    onMatchAutoVictory: (data) => {
-      showToast(`🏆 ${data.winnerName} wins — ${data.reason}`);
-      setVictoryData({
-        winnerId: data.winnerId,
-        winnerName: data.winnerName,
-        finalNetWorth: netWorth,
-        target: targetNetWorth,
-        totalTurns: turnsSurvived
-      });
-      fetchUserData();
-      fetchAuditLogs();
-    }
-  });
+  // Estimated monthly operating cash flow before financing costs.
+  const monthlyCashflow = ownedProperties.reduce(
+    (sum, property) => sum + property.monthlyRent * 0.95 - property.price * 0.01 / 12,
+    0
+  );
 
-  // Calculate Monthly Cashflow
-  const monthlyCashflow = ownedProperties.reduce((sum, p) => sum + p.monthlyRent - Math.round(p.price * 0.006), 0);
+  // Ensure default investor authentication so all REST calls succeed smoothly
+  const ensureDefaultSession = async (investorName = 'Davide') => {
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: `${investorName.toLowerCase()}@metrohunt.com`, name: investorName })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem('metrohunt_token', data.token);
+        setToken(data.token);
+        setUser({
+          id: data.userId,
+          userName: data.userName,
+          email: data.email,
+          liquidBalance: data.liquidBalance
+        });
+        return data.token;
+      }
+    } catch (err) {
+      console.warn('Auto-session initialization fallback:', err);
+    }
+    return null;
+  };
 
   // Fetch Current User
   const fetchUserData = async () => {
@@ -162,14 +99,18 @@ export function App() {
         setTurnsSurvived(data.turnsSurvived);
         setOwnedProperties(data.ownedProperties || []);
 
-        // Automatically join lobby roster
-        joinLobby(data.id, data.userName);
-      } else {
-        setUser(null);
+        if (data.netWorth >= targetNetWorth && targetNetWorth > 0 && data.turnsSurvived > 0 && !victoryData) {
+          setVictoryData({
+            winnerId: data.id,
+            winnerName: data.userName,
+            finalNetWorth: data.netWorth,
+            totalTurns: data.turnsSurvived,
+            target: targetNetWorth
+          });
+        }
       }
     } catch (err) {
       console.warn('Failed to fetch user state: ', err);
-      setUser(null);
     }
   };
 
@@ -208,146 +149,28 @@ export function App() {
     }
   };
 
-  // Fetch Audit Logs
-  const fetchAuditLogs = async () => {
-    try {
-      const res = await fetch('/api/market/audit-logs');
-      if (res.ok) {
-        const data = await res.json();
-        setAuditLogs(data);
-      }
-    } catch (err) {
-      console.warn('Failed to fetch audit logs: ', err);
-    }
-  };
-
+  // Initialize data on mount
   useEffect(() => {
-    fetchUserData();
-    fetchMarketProperties();
-    fetchSession();
-    fetchAuditLogs();
+    const init = async () => {
+      let activeToken = token;
+      if (!activeToken) {
+        activeToken = await ensureDefaultSession('Davide');
+      }
+      await fetchUserData();
+      await fetchMarketProperties();
+      await fetchSession();
+    };
+    init();
   }, [token]);
 
-  // Auth Handlers
-  const handleLogin = async (email: string, password = 'password123') => {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      localStorage.setItem('metrohunt_token', data.token);
-      setToken(data.token);
-      setUser({
-        id: data.userId,
-        userName: data.userName,
-        email: data.email,
-        liquidBalance: data.liquidBalance
-      });
-      joinLobby(data.userId, data.userName);
-      showToast(`Welcome back, ${data.userName}!`);
-    } else {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Invalid credentials.');
-    }
-  };
-
-  const handleRegister = async (email: string, regUserName: string, password = 'password123') => {
-    const res = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, userName: regUserName, password })
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      localStorage.setItem('metrohunt_token', data.token);
-      setToken(data.token);
-      setUser({
-        id: data.userId,
-        userName: data.userName,
-        email: data.email,
-        liquidBalance: data.liquidBalance
-      });
-      joinLobby(data.userId, data.userName);
-      showToast(`Registered investor profile: ${data.userName}!`);
-    } else {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Registration failed.');
-    }
-  };
-
-  const handleGoogleLogin = async (email: string, name: string) => {
-    const res = await fetch('/api/auth/google', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, name })
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      localStorage.setItem('metrohunt_token', data.token);
-      setToken(data.token);
-      setUser({
-        id: data.userId,
-        userName: data.userName,
-        email: data.email,
-        liquidBalance: data.liquidBalance
-      });
-      joinLobby(data.userId, data.userName);
-      showToast(`Authenticated via Google profile: ${data.userName}!`);
-    } else {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Google authentication failed.');
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('metrohunt_token');
-    setToken(null);
-    setUser(null);
-    setCurrentView('lobby');
-    showToast('Signed out of investor session.');
-  };
-
-  const handleVerifiedLogin = (tokenVal: string, userObj: { id: string; userName: string; email: string; liquidBalance: number }) => {
-    localStorage.setItem('metrohunt_token', tokenVal);
-    setToken(tokenVal);
-    setUser(userObj);
-    joinLobby(userObj.id, userObj.userName);
-    showToast(`Welcome, ${userObj.userName}! Email verified successfully.`);
-  };
-
-  const handleAbandonMatch = async () => {
-    try {
-      // Surrender via SignalR (only removes THIS player from the match, others continue)
-      surrenderMatch();
-
-      // Also call the API to reset this player's state
-      const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      const res = await fetch('/api/game/abandon', {
-        method: 'POST',
-        headers
-      });
-
-      if (res.ok) {
-        showToast('🏳 Match forfeited. You surrendered — other players continue!');
-        await fetchUserData();
-        await fetchMarketProperties();
-        await fetchAuditLogs();
-        setCurrentView('lobby');
-      } else {
-        showToast('Could not abandon match.');
-        setCurrentView('lobby');
-      }
-    } catch (err) {
-      console.warn('Abandon match error:', err);
-      setCurrentView('lobby');
-    }
+  // Start Career from Lobby
+  const handleStartCareer = async (chosenName: string, chosenTarget: number) => {
+    await ensureDefaultSession(chosenName);
+    await handleSetTarget(chosenTarget);
+    await fetchUserData();
+    await fetchMarketProperties();
+    setCurrentView('game');
+    showToast(`Career started. Before buying, compare rent with upkeep and keep cash available for repairs.`);
   };
 
   // Complete Brokerage Deal Execution
@@ -367,7 +190,6 @@ export function App() {
         if (user) setUser({ ...user, liquidBalance: data.newBalance });
         showToast(`💼 ${data.message}`);
         fetchUserData();
-        fetchAuditLogs();
         return {
           success: true,
           earnedAmount: data.earnedAmount,
@@ -397,16 +219,35 @@ export function App() {
         headers
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        setNetWorth(data.newNetWorth);
-        if (user) setUser({ ...user, liquidBalance: data.newBalance });
-        showToast(`Turn ${data.turnNumber} advanced! Net Cashflow: +$${data.netCashflow?.toLocaleString()}`);
-        fetchUserData();
-        fetchMarketProperties();
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.message || data?.title || 'The market could not advance. Try again.');
+      if (!data || typeof data.turnNumber !== 'number' || typeof data.newBalance !== 'number') {
+        throw new Error('Incomplete response from market engine.');
       }
+
+      setTurnsSurvived(turn => turn + 1);
+      setNetWorth(data.newNetWorth);
+      if (user) setUser({ ...user, liquidBalance: data.newBalance });
+      showToast(`Market cycle ${turnsSurvived + 1} complete · Net cash flow ${data.netCashflow >= 0 ? '+' : ''}$${data.netCashflow?.toLocaleString()}`);
+      
+      // Check win condition
+      if (data.newNetWorth >= targetNetWorth && targetNetWorth > 0) {
+        setVictoryData({
+          winnerId: user?.id || 'player',
+          winnerName: user?.userName || 'You',
+          finalNetWorth: data.newNetWorth,
+          totalTurns: turnsSurvived + 1,
+          target: targetNetWorth
+        });
+      }
+
+      fetchUserData();
+      fetchMarketProperties();
     } catch (err: any) {
-      showToast(`Error advancing turn: ${err.message}`);
+      const message = err instanceof TypeError
+        ? 'Cannot reach the Metro Hunt API on port 5000. Make sure the server is running, then retry.'
+        : err.message;
+      showToast(`Market update failed: ${message}`);
     } finally {
       setIsAdvancing(false);
     }
@@ -425,13 +266,13 @@ export function App() {
         body: JSON.stringify({ rowVersionBase64: rowVersion })
       });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success) {
         showToast(data.message);
         fetchUserData();
         fetchMarketProperties();
       } else {
-        showToast(data.message || 'Transaction aborted by market engine.');
+        showToast(data?.message || 'Transaction aborted by market engine.');
         fetchMarketProperties();
       }
     } catch (err: any) {
@@ -453,47 +294,18 @@ export function App() {
         headers
       });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success) {
         showToast(data.message);
         fetchUserData();
         fetchMarketProperties();
-        fetchAuditLogs();
       } else {
-        showToast(data.message || 'Renovation declined.');
+        showToast(data?.message || 'Renovation declined.');
       }
     } catch (err: any) {
       showToast(`Renovation error: ${err.message}`);
     } finally {
       setIsRenovating(false);
-    }
-  };
-
-  // Launch Regulatory Safety Audit on Competitor Property
-  const handleAuditProperty = async (propertyId: number) => {
-    setIsAuditing(true);
-    try {
-      const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      const res = await fetch(`/api/market/audit/${propertyId}`, {
-        method: 'POST',
-        headers
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        showToast(data.message);
-        fetchUserData();
-        fetchMarketProperties();
-        fetchAuditLogs();
-      } else {
-        showToast(data.message || 'Regulatory audit aborted.');
-      }
-    } catch (err: any) {
-      showToast(`Audit error: ${err.message}`);
-    } finally {
-      setIsAuditing(false);
     }
   };
 
@@ -557,7 +369,7 @@ export function App() {
       const res = await fetch('/api/game/reset', { method: 'POST' });
       if (res.ok) {
         setVictoryData(null);
-        showToast('All portfolios, loans, and turns reset to Day 1.');
+        showToast('All portfolios, loans, and turns reset to initial state.');
         fetchUserData();
         fetchMarketProperties();
       }
@@ -566,76 +378,78 @@ export function App() {
     }
   };
 
-  // PAGE 1: AUTHENTICATION / LOGIN PAGE (Dedicated entry gate)
-  if (!user || !token) {
-    return (
-      <LoginPage
-        onLogin={handleLogin}
-        onRegister={handleRegister}
-        onGoogleLogin={handleGoogleLogin}
-        onVerifiedLogin={handleVerifiedLogin}
-      />
-    );
-  }
+  // Abandon Career Session
+  const handleAbandonCareer = async () => {
+    try {
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  // PAGE 2: LOBBY & MATCHMAKING LOUNGE (Dead by Daylight / Multiplayer Room style)
+      await fetch('/api/game/abandon', { method: 'POST', headers });
+      setVictoryData(null);
+      showToast('🏳 Career forfeited. Holdings returned to market.');
+      await fetchUserData();
+      await fetchMarketProperties();
+      setCurrentView('lobby');
+    } catch (err) {
+      console.warn('Abandon error:', err);
+      setCurrentView('lobby');
+    }
+  };
+
+  // Current player's progress toward their selected net-worth goal.
+  const soloLeaderboard: PlayerScore[] = [
+    {
+      playerId: user?.id || 'davide',
+      playerName: user?.userName || 'Davide',
+      netWorth: netWorth,
+      propertiesOwned: ownedProperties.length,
+      isEliminated: false
+    }
+  ];
+
+  // VIEW 1: SINGLEPLAYER LOBBY PAGE (Mission Control / Starting Gate)
   if (currentView === 'lobby') {
     return (
-      <LobbyPage
-        currentUser={user}
-        lobbyState={lobbyState}
-        roomsList={roomsList}
-        currentRoomId={currentRoomId}
-        isSignalRConnected={isConnected}
-        onJoinRoom={joinRoom}
-        onCreateRoom={createRoom}
-        onSetReady={(isReady) => setReady(isReady)}
-        onSetTargetGoal={(target) => {
-          setTargetGoal(target);
-          handleSetTarget(target);
-        }}
-        onStartMatch={() => {
-          setGameMode('multiplayer');
-          startMatch();
-        }}
-        onStartSolo={(target) => {
-          setGameMode('solo');
-          setTargetNetWorth(target);
-          handleSetTarget(target);
-          setCurrentView('game');
-        }}
-        onLogout={handleLogout}
-      />
+      <>
+        <LobbyPage
+          initialPlayerName={user?.userName || 'Davide'}
+          initialTarget={targetNetWorth}
+          onStartCareer={handleStartCareer}
+          onNotify={showToast}
+          hasActiveCareer={turnsSurvived > 0 || ownedProperties.length > 0}
+          onResumeCareer={() => setCurrentView('game')}
+        />
+        {/* Live Toast Alert */}
+        {toastMessage && (
+          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl text-xs font-mono text-slate-100 animate-in slide-in-from-bottom-5">
+            <Sparkles size={16} className="text-amber-400 shrink-0" />
+            <span>{toastMessage}</span>
+          </div>
+        )}
+      </>
     );
   }
 
-  // PAGE 3: ACTIVE SIMULATION BOARD (Live trading floor, properties, race tracker)
+  // VIEW 2: ACTIVE PROPERTY INVESTMENT SIMULATION
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950">
       {/* Navigation */}
       <Navbar
-        userName={user?.userName}
-        gameMode={gameMode}
-        isSignalRConnected={isConnected}
-        onOpenAuth={() => setIsAuthOpen(true)}
+        userName={user?.userName || 'Davide'}
+        onOpenLobby={() => setCurrentView('lobby')}
+        onAbandon={handleAbandonCareer}
         onOpenLoan={() => setIsLoanOpen(true)}
         onWorkDeal={() => setIsWorkDealOpen(true)}
         isWorking={false}
         onAdvanceTurn={handleAdvanceTurn}
         isAdvancing={isAdvancing}
         onResetGame={handleResetGame}
-        onLogout={handleLogout}
-        onReturnToLobby={() => {
-          returnToLobby();
-          setCurrentView('lobby');
-        }}
-        onAbandonMatch={handleAbandonMatch}
       />
 
       {/* Main Content Layout */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
-        {/* Dynamic Macro Cycle Timer Bar (Live active loading bar!) */}
+        {/* Dynamic Macro Cycle Timer Bar */}
         <MarketCycleTimer
           currentTurn={turnsSurvived}
           onAdvanceTurn={handleAdvanceTurn}
@@ -643,12 +457,11 @@ export function App() {
           centralBankRate={centralBankRate}
         />
 
-        {/* Live Race Tracker Bar */}
+        {/* Net-worth goal progress */}
         <RaceTracker
           targetNetWorth={targetNetWorth}
-          players={leaderboard}
-          currentPlayerId={user?.id}
-          gameMode={gameMode}
+          players={soloLeaderboard}
+          currentPlayerId={user?.id || 'davide'}
           currentNetWorth={netWorth}
           currentPropertiesCount={ownedProperties.length}
           onSetTarget={handleSetTarget}
@@ -677,17 +490,10 @@ export function App() {
           liquidBalance={user?.liquidBalance || 100_000}
           currentUserId={user?.id}
           onBuyProperty={handleBuyProperty}
-          onAuditProperty={handleAuditProperty}
           onGenerateProperties={handleGenerateProperties}
           isBuying={isBuying}
-          isAuditing={isAuditing}
         />
 
-        {/* Audit Ledger */}
-        <AuditLedger
-          logs={auditLogs}
-          onRefresh={fetchAuditLogs}
-        />
       </main>
 
       {/* Live Toast Alert */}
@@ -706,14 +512,6 @@ export function App() {
         turnsSurvived={turnsSurvived}
       />
 
-      <AuthModal
-        isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
-        onLogin={handleLogin}
-        onRegister={handleRegister}
-        onGoogleLogin={handleGoogleLogin}
-      />
-
       <LoanModal
         isOpen={isLoanOpen}
         onClose={() => setIsLoanOpen(false)}
@@ -729,4 +527,5 @@ export function App() {
     </div>
   );
 }
+
 export default App;

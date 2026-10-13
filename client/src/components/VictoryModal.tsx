@@ -1,6 +1,13 @@
 import React from 'react';
 import { Trophy, RotateCcw } from 'lucide-react';
-import type { VictoryData } from '../hooks/useGameHub';
+
+export interface VictoryData {
+  winnerId: string;
+  winnerName: string;
+  finalNetWorth: number;
+  totalTurns: number;
+  target: number;
+}
 
 interface VictoryModalProps {
   victory: VictoryData | null;
@@ -44,13 +51,13 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
           </span>
 
           <h2 className="text-3xl font-extrabold text-slate-100 tracking-tight mb-2">
-            {isWinner ? 'You Won the Game!' : `${victory.winnerName} Reached Target!`}
+            {isWinner ? 'Investment goal reached' : `${victory.winnerName} reached the goal`}
           </h2>
 
           <p className="text-sm text-slate-400 mb-6 max-w-md">
             {isWinner
-              ? `Congratulations! You reached $${(victory.target / 1_000_000).toFixed(0)}M net worth first and established your real estate empire.`
-              : `${victory.winnerName} crossed the $${(victory.target / 1_000_000).toFixed(0)}M milestone first. Better luck in the next business cycle!`}
+              ? `Your simulated net worth reached $${(victory.target / 1_000_000).toFixed(0)}M. Review the decisions that helped you get there and the risks you took along the way.`
+              : `${victory.winnerName} reached the selected net-worth goal.`}
           </p>
 
           {/* Stats Breakdown Card */}

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Clock, Play, TrendingUp, Zap } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Activity, ArrowUpRight, Clock3 } from 'lucide-react';
 
 interface MarketCycleTimerProps {
   currentTurn: number;
@@ -8,85 +8,108 @@ interface MarketCycleTimerProps {
   centralBankRate: number;
 }
 
+const CYCLE_SECONDS = 45;
+
 export const MarketCycleTimer: React.FC<MarketCycleTimerProps> = ({
   currentTurn,
   onAdvanceTurn,
   isAdvancing,
   centralBankRate
 }) => {
-  const [secondsRemaining, setSecondsRemaining] = useState<number>(45);
-  const totalCycleSeconds = 45;
+  const [secondsRemaining, setSecondsRemaining] = useState(CYCLE_SECONDS);
+  const advanceRef = useRef(onAdvanceTurn);
+  const advancingRef = useRef(isAdvancing);
+
+  useEffect(() => { advanceRef.current = onAdvanceTurn; }, [onAdvanceTurn]);
+  useEffect(() => { advancingRef.current = isAdvancing; }, [isAdvancing]);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setSecondsRemaining((prev) => {
-        if (prev <= 1) {
-          return totalCycleSeconds; // Loop cycle bar
+    setSecondsRemaining(CYCLE_SECONDS);
+  }, [currentTurn]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setSecondsRemaining(seconds => {
+        if (seconds <= 1) {
+          if (!advancingRef.current) {
+            advancingRef.current = true;
+            advanceRef.current();
+          }
+          return CYCLE_SECONDS;
         }
-        return prev - 1;
+        return seconds - 1;
       });
     }, 1000);
 
-    return () => clearInterval(timer);
+    return () => window.clearInterval(timer);
   }, []);
 
-  const progressPct = ((totalCycleSeconds - secondsRemaining) / totalCycleSeconds) * 100;
+  const progress = ((CYCLE_SECONDS - secondsRemaining) / CYCLE_SECONDS) * 100;
 
   return (
-    <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-xl backdrop-blur-sm mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-      {/* Left Info */}
-      <div className="flex items-center gap-3.5 w-full sm:w-auto">
-        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-emerald-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
-          <Clock size={20} className="animate-spin text-cyan-400 duration-1000" />
+    <section className="mb-6 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/90 text-slate-100 shadow-xl backdrop-blur-md">
+      <div className="grid gap-5 px-5 py-5 sm:grid-cols-[minmax(190px,.8fr)_minmax(220px,1.4fr)_auto] sm:items-center sm:px-6">
+        {/* City Economy Indicator */}
+        <div className="flex items-center gap-3.5">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
+            <Activity size={20} />
+          </div>
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-widest text-slate-400 font-semibold">City Economy</p>
+            <h2 className="mt-0.5 text-sm font-bold text-slate-100">
+              Market Cycle <span className="font-mono text-emerald-400 font-extrabold">{String(currentTurn + 1).padStart(2, '0')}</span>
+            </h2>
+          </div>
         </div>
+
+        {/* Progress Bar & Countdown */}
         <div>
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-sm text-slate-100">
-              Macro Cycle #{currentTurn}
+          <div className="mb-2 flex items-center justify-between text-xs font-mono">
+            <span className="flex items-center gap-1.5 text-slate-400">
+              <Clock3 size={13} className="text-cyan-400" /> Next Market Update
             </span>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold flex items-center gap-1">
-              <Zap size={10} /> Active Economic Ticker
+            <span className="font-bold tabular-nums text-slate-200">
+              {isAdvancing ? 'Updating…' : `${secondsRemaining}s`}
             </span>
           </div>
-          <div className="text-xs text-slate-400 font-mono flex items-center gap-2 mt-0.5">
-            <span>Next Market Tick in <strong className="text-cyan-300">{secondsRemaining}s</strong></span>
-            <span>•</span>
-            <span className="text-amber-400">APR: {(centralBankRate * 100).toFixed(1)}%</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Middle Animated Progress Bar */}
-      <div className="w-full sm:max-w-md flex flex-col gap-1.5">
-        <div className="flex items-center justify-between text-[11px] font-mono">
-          <span className="text-slate-400 flex items-center gap-1">
-            <TrendingUp size={11} className="text-emerald-400" /> Market Yield Cycle
-          </span>
-          <span className="text-cyan-400 font-bold">{progressPct.toFixed(0)}%</span>
-        </div>
-        
-        {/* Animated striped bar */}
-        <div className="relative h-2.5 w-full bg-slate-950 rounded-full overflow-hidden border border-slate-800">
-          <div
-            className="h-full bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-400 transition-all duration-1000 ease-linear rounded-full relative"
-            style={{ width: `${progressPct}%` }}
+          <div 
+            className="h-2.5 overflow-hidden rounded-full bg-slate-950 border border-slate-800 p-0.5" 
+            role="progressbar" 
+            aria-label="Time until the next market cycle" 
+            aria-valuemin={0} 
+            aria-valuemax={100} 
+            aria-valuenow={Math.round(progress)}
           >
-            <div className="absolute inset-0 bg-white/20 animate-pulse" />
+            <div 
+              className="h-full rounded-full bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-400 shadow-[0_0_12px_rgba(16,185,129,0.5)] transition-[width] duration-1000 ease-linear" 
+              style={{ width: `${progress}%` }} 
+            />
+          </div>
+          <div className="mt-1.5 flex items-center justify-between text-[10px] font-mono text-slate-500">
+            <span>Cycle In Progress</span>
+            <span>Auto-Advances Market</span>
           </div>
         </div>
-      </div>
 
-      {/* Right Action */}
-      <div className="w-full sm:w-auto flex justify-end">
-        <button
-          onClick={onAdvanceTurn}
-          disabled={isAdvancing}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 hover:brightness-110 shadow-md shadow-emerald-500/20 transition-all cursor-pointer"
-        >
-          <Play size={14} className={isAdvancing ? 'animate-spin' : ''} />
-          <span>{isAdvancing ? 'Advancing Cycle...' : 'Advance Cycle Now'}</span>
-        </button>
+        {/* Base Rate & Advance Trigger */}
+        <div className="flex items-center justify-between gap-4 border-t border-slate-800 pt-4 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-widest text-slate-400 font-semibold">Central Bank Rate</p>
+            <p className="mt-0.5 text-sm font-bold font-mono tabular-nums text-slate-100">
+              {(centralBankRate * 100).toFixed(1)}% <span className="text-xs font-normal text-amber-400">APR</span>
+            </p>
+          </div>
+          <button 
+            type="button" 
+            onClick={onAdvanceTurn} 
+            disabled={isAdvancing} 
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2.5 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 disabled:cursor-wait disabled:opacity-50 cursor-pointer"
+          >
+            {isAdvancing ? 'Advancing…' : 'Advance Now'} 
+            <ArrowUpRight size={15} />
+          </button>
+        </div>
       </div>
-    </div>
+    </section>
   );
 };

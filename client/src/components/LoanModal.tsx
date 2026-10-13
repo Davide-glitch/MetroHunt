@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import { Landmark, X, AlertCircle } from 'lucide-react';
 
+const estimateMonthlyPayment = (principal: number) => {
+  const monthlyRate = 0.065 / 12;
+  return Math.round((principal * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -24)));
+};
+
 interface LoanModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -39,7 +44,7 @@ export const LoanModal: React.FC<LoanModalProps> = ({
         </div>
 
         <p className="text-xs text-slate-400 mb-5">
-          Leverage your balance sheet with fixed 6.5% interest bank debt amortized over 24 turns to rapidly acquire high-yield assets.
+          Fixed 6.5% annual interest, repaid over 24 monthly cycles. Compare the payment with rent after vacancy and upkeep before borrowing.
         </p>
 
         <div className="space-y-2 mb-6">
@@ -55,7 +60,7 @@ export const LoanModal: React.FC<LoanModalProps> = ({
             >
               <span>${amt.toLocaleString()} Principal</span>
               <span className="text-slate-400">
-                ~${Math.round((amt * 1.065) / 24).toLocaleString()}/mo
+                ~${estimateMonthlyPayment(amt).toLocaleString()}/mo
               </span>
             </button>
           ))}

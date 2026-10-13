@@ -1,12 +1,18 @@
 import React from 'react';
 import { Trophy } from 'lucide-react';
-import type { PlayerScore } from '../hooks/useGameHub';
+
+export interface PlayerScore {
+  playerId: string;
+  playerName: string;
+  netWorth: number;
+  propertiesOwned: number;
+  isEliminated: boolean;
+}
 
 interface RaceTrackerProps {
   targetNetWorth: number;
   players: PlayerScore[];
   currentPlayerId?: string;
-  gameMode?: 'solo' | 'multiplayer';
   currentNetWorth?: number;
   currentPropertiesCount?: number;
   onSetTarget?: (target: number) => void;
@@ -16,18 +22,12 @@ export const RaceTracker: React.FC<RaceTrackerProps> = ({
   targetNetWorth,
   players,
   currentPlayerId,
-  gameMode = 'solo',
   currentNetWorth,
   currentPropertiesCount = 0,
   onSetTarget
 }) => {
-  const displayPlayers = gameMode === 'solo'
+  const rows = players.length > 0
     ? players.filter(p => p.playerId === currentPlayerId)
-    : players;
-
-  // Fallback row for solo if signalr hasn't sent player score yet
-  const rows = displayPlayers.length > 0
-    ? displayPlayers
     : currentPlayerId
       ? [{
           playerId: currentPlayerId,
@@ -48,16 +48,14 @@ export const RaceTracker: React.FC<RaceTrackerProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-bold tracking-wider text-slate-100 uppercase">
-                {gameMode === 'solo' ? 'Solo Tycoon Milestone' : 'Multiplayer First-to-Target Race'}
+                Investment goal
               </h3>
               <span className="px-2 py-0.5 text-[10px] font-mono bg-amber-500/20 text-amber-300 rounded font-bold">
                 Goal: ${(targetNetWorth / 1_000_000).toFixed(0)}M
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              {gameMode === 'solo'
-                ? `Build equity and reach $${(targetNetWorth / 1_000_000).toFixed(0)}M net worth to secure financial victory`
-                : `First syndicate investor to cross $${(targetNetWorth / 1_000_000).toFixed(0)}M net worth secures victory`}
+              Track your progress toward $${(targetNetWorth / 1_000_000).toFixed(0)}M net worth.
             </p>
           </div>
         </div>
@@ -101,7 +99,7 @@ export const RaceTracker: React.FC<RaceTrackerProps> = ({
       <div className="space-y-4">
         {rows.length === 0 ? (
           <div className="text-xs font-mono text-slate-500 text-center py-2">
-            Connecting real-time investors to market state...
+            Your portfolio progress will appear here.
           </div>
         ) : (
           rows.map((player) => {

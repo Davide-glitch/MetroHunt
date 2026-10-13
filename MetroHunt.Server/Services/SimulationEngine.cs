@@ -77,7 +77,7 @@ namespace MetroHunt.Server.Services
                     return new PropertyBuyResult
                     {
                         Success = false,
-                        Message = "This property has already been acquired by another investor!"
+                        Message = "This property is no longer available."
                     };
                 }
 
@@ -160,7 +160,7 @@ namespace MetroHunt.Server.Services
                 return new PropertyBuyResult
                 {
                     Success = false,
-                    Message = "Acquisition conflict: Another investor purchased this property simultaneously! Transaction aborted."
+                    Message = "This listing changed while you were buying it. Refresh the market and try again."
                 };
             }
             catch (Exception ex)
@@ -190,47 +190,63 @@ namespace MetroHunt.Server.Services
                 session.CurrentRound++;
                 player.TurnsSurvived++;
 
-                // 1. Collect Rent
-                decimal totalRentCollected = 0m;
-                foreach (var prop in player.OwnedProperties.Where(p => p.IsOccupied))
+                // 1. Estimate collected rent after a 5% vacancy/collection allowance.
+                decimal grossRent = player.OwnedProperties
+                    .Where(p => p.IsOccupied)
+                    .Sum(p => p.MonthlyRent);
+                decimal totalRentCollected = Math.Round(grossRent * 0.95m, 2);
+                decimal vacancyLoss = grossRent - totalRentCollected;
+
+                // 2. Reserve 1% of property value per year for routine maintenance.
+                // Maintenance is limited by cash on hand; unfunded upkeep lowers condition.
+                var maintenanceDueByProperty = player.OwnedProperties
+                    .Select(p => new
+                    {
+                        Property = p,
+                        Due = Math.Round(p.Price * 0.01m / 12m, 2)
+                    })
+                    .ToList();
+                decimal totalMaintenanceDue = maintenanceDueByProperty.Sum(x => x.Due);
+                decimal maintenanceBudget = Math.Max(0m, player.LiquidBalance + totalRentCollected);
+                decimal totalMaintenancePaid = Math.Min(totalMaintenanceDue, maintenanceBudget);
+                decimal maintenanceRatio = totalMaintenanceDue == 0m
+                    ? 1m
+                    : totalMaintenancePaid / totalMaintenanceDue;
+                foreach (var item in maintenanceDueByProperty)
                 {
-                    totalRentCollected += prop.MonthlyRent;
+                    if (maintenanceRatio < 1m)
+                    {
+                        item.Property.Condition = Math.Max(10, item.Property.Condition - 2);
+                        item.Property.MonthlyRent = Math.Round(item.Property.MonthlyRent * 0.98m, 2);
+                    }
                 }
 
-                // 2. Maintenance costs
-                decimal totalMaintenancePaid = 0m;
-                foreach (var prop in player.OwnedProperties)
-                {
-                    decimal maintenanceCost = Math.Round(prop.Price * 0.006m, 2);
-                    if (player.LiquidBalance + totalRentCollected >= maintenanceCost)
-                    {
-                        totalMaintenancePaid += maintenanceCost;
-                    }
-                    else
-                    {
-                        prop.Condition = Math.Max(10, prop.Condition - 10);
-                        prop.MonthlyRent = Math.Round(prop.MonthlyRent * 0.90m, 2);
-                    }
-                }
-
-                // 3. Loan Amortization deductions
+                // 3. Service fixed-rate loans using monthly interest and principal amortization.
+                decimal cashAvailableForDebt = Math.Max(0m,
+                    player.LiquidBalance + totalRentCollected - totalMaintenancePaid);
                 decimal totalLoanPaymentsPaid = 0m;
                 var loansToRemove = new List<Loan>();
                 foreach (var loan in player.ActiveLoans)
                 {
-                    if (player.LiquidBalance + totalRentCollected - totalMaintenancePaid >= loan.MonthlyPayment)
+                    decimal monthlyRate = loan.InterestRate / 12m;
+                    decimal interestDue = Math.Round(loan.RemainingBalance * monthlyRate, 2);
+                    decimal amountDue = Math.Min(loan.MonthlyPayment, loan.RemainingBalance + interestDue);
+
+                    if (cashAvailableForDebt >= amountDue)
                     {
-                        totalLoanPaymentsPaid += loan.MonthlyPayment;
-                        loan.RemainingBalance = Math.Max(0m, loan.RemainingBalance - loan.MonthlyPayment);
-                        if (loan.RemainingBalance <= 0)
+                        decimal principalPaid = Math.Max(0m, amountDue - interestDue);
+                        loan.RemainingBalance = Math.Max(0m, loan.RemainingBalance - principalPaid);
+                        totalLoanPaymentsPaid += amountDue;
+                        cashAvailableForDebt -= amountDue;
+                        if (loan.RemainingBalance <= 0m)
                         {
                             loansToRemove.Add(loan);
                         }
                     }
                     else
                     {
-                        decimal maxLiability = loan.Principal * 1.50m;
-                        loan.RemainingBalance = Math.Min(maxLiability, Math.Round(loan.RemainingBalance * 1.01m, 2));
+                        // A missed payment does not spend cash, but interest still accrues.
+                        loan.RemainingBalance = Math.Round(loan.RemainingBalance + interestDue, 2);
                     }
                 }
 
@@ -283,7 +299,7 @@ namespace MetroHunt.Server.Services
 
                     appreciationRate *= (prop.Condition / 100.0m);
                     prop.Price = Math.Round(prop.Price * (1 + appreciationRate), 2);
-                    prop.MonthlyRent = Math.Round(prop.Price * 0.008m, 2);
+                    prop.MonthlyRent = Math.Round(prop.Price * 0.0065m, 2);
                 }
 
                 // 5. Market Events
@@ -337,7 +353,9 @@ namespace MetroHunt.Server.Services
                 return new AdvanceTurnResult
                 {
                     TurnNumber = session.CurrentRound,
+                    GrossRent = grossRent,
                     RentCollected = totalRentCollected,
+                    VacancyLoss = vacancyLoss,
                     MaintenancePaid = totalMaintenancePaid,
                     LoanPaymentsPaid = totalLoanPaymentsPaid,
                     NetCashflow = netCashflow,
@@ -383,7 +401,7 @@ namespace MetroHunt.Server.Services
                 player.LiquidBalance -= renovationCost;
                 property.Condition = 100;
                 property.Price = Math.Round(property.Price * 1.12m, 0); // 12% equity surge
-                property.MonthlyRent = Math.Round(property.Price * 0.009m, 0); // Boosted rental yield
+                property.MonthlyRent = Math.Round(property.Price * 0.0065m, 0);
 
                 var session = await GetOrCreateActiveSessionAsync();
                 _context.AuditLogs.Add(new AuditLog
@@ -722,7 +740,7 @@ namespace MetroHunt.Server.Services
 
                 decimal variance = (decimal)(0.85 + _rand.NextDouble() * 0.30);
                 decimal finalPrice = Math.Round(basePrice * districtMultiplier * variance, 0);
-                decimal monthlyRent = Math.Round(finalPrice * 0.0090m, 0);
+                decimal monthlyRent = Math.Round(finalPrice * 0.0065m, 0);
 
                 var prop = new Property
                 {
@@ -798,13 +816,14 @@ namespace MetroHunt.Server.Services
             }
 
             decimal interestRate = 0.0650m;
-            decimal monthlyPayment = Math.Round((principal * (1 + interestRate)) / 24, 2);
+            const int termMonths = 24;
+            decimal monthlyPayment = CalculateMonthlyPayment(principal, interestRate, termMonths);
 
             var loan = new Loan
             {
                 Principal = principal,
                 InterestRate = interestRate,
-                RemainingBalance = principal * (1 + interestRate),
+                RemainingBalance = principal,
                 MonthlyPayment = monthlyPayment,
                 PlayerUserId = player.Id
             };
@@ -872,6 +891,19 @@ namespace MetroHunt.Server.Services
 
             await _context.SaveChangesAsync();
             await _hubContext.Clients.All.SendAsync("GameReset", new { Message = "Game has been reset to starting state." });
+        }
+
+        private static decimal CalculateMonthlyPayment(decimal principal, decimal annualRate, int termMonths)
+        {
+            decimal monthlyRate = annualRate / 12m;
+            if (monthlyRate == 0m)
+            {
+                return Math.Round(principal / termMonths, 2);
+            }
+
+            double discountFactor = Math.Pow(1d + (double)monthlyRate, -termMonths);
+            decimal payment = principal * monthlyRate / (1m - (decimal)discountFactor);
+            return Math.Round(payment, 2);
         }
 
         private static MarketEvent GenerateRandomMarketEvent()

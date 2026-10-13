@@ -35,7 +35,7 @@ namespace MetroHunt.Server.Models
         [ForeignKey(nameof(OwnerId))]
         public virtual PlayerUser? Owner { get; set; }
 
-        // Optimistic concurrency token to prevent duplicate simultaneous purchases in multiplayer
+        // Detects conflicting updates when the same listing changes before a purchase completes.
         [Timestamp]
         public byte[] RowVersion { get; set; } = Array.Empty<byte>();
     }

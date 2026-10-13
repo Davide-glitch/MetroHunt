@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShoppingBag, Sparkles, Lock, ShieldAlert, KeyRound } from 'lucide-react';
+import { ShoppingBag, Sparkles, Lock, KeyRound } from 'lucide-react';
 import { getPropertyVisual } from '../utils/propertyVisuals';
 
 export interface MarketProperty {
@@ -21,10 +21,8 @@ interface MarketplaceProps {
   liquidBalance: number;
   currentUserId?: string;
   onBuyProperty: (propertyId: number, rowVersion: string) => void;
-  onAuditProperty: (propertyId: number) => void;
   onGenerateProperties: () => void;
   isBuying: boolean;
-  isAuditing: boolean;
 }
 
 export const Marketplace: React.FC<MarketplaceProps> = ({
@@ -32,10 +30,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   liquidBalance,
   currentUserId,
   onBuyProperty,
-  onAuditProperty,
   onGenerateProperties,
   isBuying,
-  isAuditing
 }) => {
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl mb-6">
@@ -46,7 +42,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
             Live Property Marketplace
           </h3>
           <p className="text-xs text-slate-400">
-            Acquire real estate across districts with optimistic concurrency locking & competitor audits
+            Compare asking prices, rental income, and property condition across the city.
           </p>
         </div>
 
@@ -63,9 +59,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         {properties.map((prop) => {
           const isOwned = !!prop.ownerId;
           const isOwnedByMe = prop.ownerId === currentUserId;
-          const isOwnedByRival = isOwned && !isOwnedByMe;
           const canAfford = liquidBalance >= prop.price && !isOwned;
-          const canAffordAudit = liquidBalance >= 25_000 && isOwnedByRival;
           const visual = getPropertyVisual(prop.type, prop.district, prop.id, prop.title);
 
           return (
@@ -74,7 +68,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
               className={`group rounded-2xl flex flex-col justify-between transition-all duration-200 overflow-hidden border ${
                 isOwnedByMe
                   ? 'bg-slate-950/70 border-emerald-500/30 shadow-md'
-                  : isOwnedByRival
+                  : isOwned
                   ? 'bg-slate-950/70 border-slate-800 shadow-md'
                   : 'bg-slate-950 border-slate-800 hover:border-slate-700 hover:shadow-xl'
               }`}
@@ -88,7 +82,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 filter brightness-90 group-hover:brightness-100"
                     loading="lazy"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).src = '/properties/apartment-loft.jpg';
+                      (e.target as HTMLImageElement).style.visibility = 'hidden';
                     }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
@@ -142,9 +136,15 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                       </span>
                     </div>
                     <div className="flex justify-between text-slate-400">
-                      <span>Rent Yield:</span>
+                      <span>Gross rent:</span>
                       <span className="text-emerald-400 font-bold">
                         +${prop.monthlyRent.toLocaleString()}/mo
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-slate-400" title="Annual rent divided by asking price, before expenses, vacancy, taxes, or financing.">
+                      <span>Gross yield estimate:</span>
+                      <span className="text-slate-200 font-bold">
+                        {prop.price > 0 ? ((prop.monthlyRent * 12 / prop.price) * 100).toFixed(1) : '0.0'}% / yr
                       </span>
                     </div>
                   </div>
@@ -160,26 +160,10 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                       {isOwnedByMe ? (
                         <span className="text-emerald-400 font-bold">Held in your portfolio</span>
                       ) : (
-                        <span className="truncate">Acquired by {prop.ownerName || 'Rival'}</span>
+                        <span className="truncate">Owned by {prop.ownerName || 'another profile'}</span>
                       )}
                     </div>
 
-                    {/* Hostile Sabotage / Regulatory Inspection on Rival's Asset */}
-                    {isOwnedByRival && (
-                      <button
-                        disabled={!canAffordAudit || isAuditing}
-                        onClick={() => onAuditProperty(prop.id)}
-                        className={`w-full py-2 px-3 rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                          canAffordAudit
-                            ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                            : 'bg-slate-950 text-slate-600 border border-slate-900 cursor-not-allowed'
-                        }`}
-                        title="File city safety inspection against rival asset ($25k fee)"
-                      >
-                        <ShieldAlert size={13} className={canAffordAudit ? 'text-rose-400' : ''} />
-                        File Safety Audit ($25k)
-                      </button>
-                    )}
                   </div>
                 ) : (
                   <button

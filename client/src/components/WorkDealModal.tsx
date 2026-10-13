@@ -47,7 +47,7 @@ const CONTRACTS: DealContract[] = [
   {
     id: 'syndicate',
     tier: 'syndicate',
-    title: 'Commercial Syndicate Brokerage',
+    title: 'Commercial Brokerage Deal',
     subtitle: 'Structure private placement debt & equity for suburban shopping and retail plazas.',
     durationSeconds: 6,
     expectedMin: 18000,

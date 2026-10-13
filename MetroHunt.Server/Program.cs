@@ -68,9 +68,12 @@ builder.Services.AddAuthentication(options =>
 });
 
 // Optional Google OAuth if configured
-var googleClientId = builder.Configuration["Authentication:Google:ClientId"];
-var googleClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
-if (!string.IsNullOrEmpty(googleClientId) && !googleClientId.StartsWith("YOUR_"))
+var googleClientId = builder.Configuration["Authentication:Google:ClientId"]?.Trim();
+var googleClientSecret = builder.Configuration["Authentication:Google:ClientSecret"]?.Trim();
+if (!string.IsNullOrWhiteSpace(googleClientId)
+    && googleClientId.Trim().EndsWith(".apps.googleusercontent.com", StringComparison.OrdinalIgnoreCase)
+    && !googleClientId.StartsWith("YOUR_")
+    && !string.IsNullOrWhiteSpace(googleClientSecret) && !googleClientSecret.StartsWith("YOUR_"))
 {
     builder.Services.AddAuthentication().AddGoogle(googleOptions =>
     {

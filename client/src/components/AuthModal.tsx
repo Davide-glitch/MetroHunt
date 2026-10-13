@@ -6,7 +6,6 @@ interface AuthModalProps {
   onClose: () => void;
   onLogin: (email: string, password?: string) => Promise<void>;
   onRegister: (email: string, userName: string, password?: string) => Promise<void>;
-  onGoogleLogin: (email: string, name: string) => Promise<void>;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -14,7 +13,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   onLogin,
   onRegister,
-  onGoogleLogin
 }) => {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [userName, setUserName] = useState('');
@@ -36,7 +34,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       if (mode === 'register') {
         await onRegister(email, userName || email.split('@')[0], password);
-        setVerificationNotice(`Verification code sent to ${email}. Your investor portfolio has been provisioned!`);
+        setVerificationNotice(`Account created for ${email}. Opening your portfolio…`);
         setTimeout(() => {
           onClose();
         }, 1500);
@@ -46,22 +44,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
     } catch (err: any) {
       setError(err.message || 'Authentication failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogleClick = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Prompt for email or default to executive google account
-      const googleEmail = email.trim() || 'investor@gmail.com';
-      const googleName = userName.trim() || googleEmail.split('@')[0];
-      await onGoogleLogin(googleEmail, googleName);
-      onClose();
-    } catch (err: any) {
-      setError(err.message || 'Google authentication failed');
     } finally {
       setLoading(false);
     }
@@ -88,45 +70,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </h3>
           <p className="text-xs text-slate-400 mt-1">
             {mode === 'login'
-              ? 'Access your saved properties and real-time multiplayer balance'
-              : 'Create your tycoon identity and start racing to the financial target'}
+              ? 'Access your saved properties and investment progress'
+              : 'Create a profile to start your property investing career'}
           </p>
-        </div>
-
-        {/* Google OAuth Button */}
-        <button
-          type="button"
-          onClick={handleGoogleClick}
-          disabled={loading}
-          className="w-full mb-4 py-2.5 px-4 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 hover:border-slate-600 text-slate-100 text-xs font-semibold flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-sm"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24">
-            <path
-              fill="#4285F4"
-              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-            />
-            <path
-              fill="#34A853"
-              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-            />
-            <path
-              fill="#FBBC05"
-              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-            />
-            <path
-              fill="#EA4335"
-              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-            />
-          </svg>
-          Continue with Google
-        </button>
-
-        <div className="relative flex py-2 items-center mb-4">
-          <div className="flex-grow border-t border-slate-800"></div>
-          <span className="flex-shrink mx-3 text-[10px] font-mono text-slate-500 uppercase tracking-wider">
-            Or with Email
-          </span>
-          <div className="flex-grow border-t border-slate-800"></div>
         </div>
 
         {error && (

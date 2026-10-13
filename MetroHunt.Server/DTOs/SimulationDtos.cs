@@ -12,7 +12,9 @@ namespace MetroHunt.Server.DTOs
     public class AdvanceTurnResult
     {
         public int TurnNumber { get; set; }
+        public decimal GrossRent { get; set; }
         public decimal RentCollected { get; set; }
+        public decimal VacancyLoss { get; set; }
         public decimal MaintenancePaid { get; set; }
         public decimal LoanPaymentsPaid { get; set; }
         public decimal NetCashflow { get; set; }
