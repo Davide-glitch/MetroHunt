@@ -52,7 +52,7 @@ if errorlevel 1 (
     ) else (
         echo       SQL Server container is running on port 1433.
         echo       Waiting 5 seconds for SQL Server initialization...
-        timeout /t 5 >nul
+        powershell -NoProfile -Command "Start-Sleep -Seconds 5" >nul 2>&1
     )
 )
 echo.
